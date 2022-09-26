@@ -3,6 +3,8 @@ title: "Disease_simu_cayo"
 author: "Alba Motes Rodrigo"
 date: "07/09/2022"
 output: html_document
+editor_options: 
+  chunk_output_type: inline
 ---
 
 ```{r}
@@ -10,6 +12,7 @@ library(dplyr)
 library(igraph)
 library(foreach)
 library(doParallel)
+library(stringr)
 n.cores<-parallel::detectCores()-1
 #set up local cluster
 my.cluster <- parallel::makeCluster(
@@ -41,8 +44,8 @@ yearsV<-unique(V.data$year)
 V.data.list<-list()
 for (i in 1:length(yearsV)){
    V.data.list[[i]]<-subset(V.data, year==yearsV[i])
-   names(V.data.list)<-yearsV
 }
+names(V.data.list)<-yearsV
 ```
 
 ## Simulation seedless and Pt=1
@@ -120,14 +123,21 @@ names(simu_res)<-list_names
 parallel::stopCluster(cl = my.cluster)
 ```
 
-## Simulation seedless, Pi=0.1 and Pdeath=0.112/0.09
+## Simulation seedless, Pi=0.1
 Bulfone et al. 2021 Journal of Infections Diseases DOI:10.1093/infdis/jiaa742
 Razani et al. 2021 Journal of Infections Diseases https://doi.org/10.1093/infdis/jiab298
 Young et al. 2022 The Lancet DOI:https://doi.org/10.1016/S1473-3099(20)30911-7
 
 ```{r}
+list_df=V.data.list
+reps=1000#number of times the simulation should be repeated
+#at each simulation time step, two individuals will interact according their probability of proxomity (edge weight). In each time step, all possible dyads are considered.
+sims=10000#number of time steps/times each dyad should be allowed to potentially interact/scans
+simu_res = replicate(6, NA, simplify = F)#storing object for simulation results
+list_names=yearsV
 pinf=0.1
-simu_res<-foreach(d=1:length(list_df))%dopar%{
+
+simu_res_pinf<-foreach(d=1:length(list_df))%dopar%{
   #for each year...
         df <- list_df[[d]]
         #calculate group size
@@ -143,6 +153,7 @@ simu_res<-foreach(d=1:length(list_df))%dopar%{
             value60 <- rep(NA, reps)
             value70 <- rep(NA, reps)
             value80 <- rep(NA, reps)
+            maxprop <- rep(NA, reps)
             props <- rep(NA, sims)
             for (r in 1:reps){
             #create vector to store the health status of each individual at each simulation step (sim)
@@ -182,16 +193,71 @@ simu_res<-foreach(d=1:length(list_df))%dopar%{
             value70[r] <- which(props >= 0.7)[1]
             value60[r] <- which(props >= 0.6)[1]
             value50[r] <- which(props >= 0.5)[1]
+            maxprop[r] <- max(props) 
             }
             #store simulation steps at which thresholds were reached in each repetition of the simulation into list
         simu_res[[d]]<- data.frame("time_to_90"=value90, 
                                               "time_to_50"=value50, 
                                               "time_to_80"=value80, 
                                               "time_to_70"=value70, 
-                                              "time_to_60"=value60)
+                                              "time_to_60"=value60,
+                                               "max_infected"=maxprop)
     }
 #name data frames in list with year names
-names(simu_res)<-list_names
-
+names(simu_res_pinf)<-list_names
 ```
 
+I was getting an error of invalid connection and running this chunked fixed it
+```{r}
+unregister_dopar <- function() {
+  env <- foreach:::.foreachGlobals
+  rm(list=ls(name=env), pos=env)
+}
+#unregister_dopar()
+```
+
+#Plot simulations V group
+Each line is a simulation. Bold lines are the means per years. Dashed lines are after the hurricane.
+```{r}
+par(mfrow=c(1,6))
+for(i in 1:length(simu_res_pinf)){
+  hist(simu_res_pinf[[i]]$time_to_50, col=c("chocolate3"), breaks=20, ylim=c(0,5), xlim=c(0, 3000), xaxt="n", xlab=names(simu_res_pinf)[i], ylab="", main="",cex.axis=1)
+  axis(1, at = seq(0, 3000, by = 500), las=2, cex.axis=1)
+  clip(0,10, 0, 5)
+  abline(v=mean(simu_res_pinf[[i]]$time_to_50, na.rm=T), col="orange", lty=1, lwd=3)
+  abline(v=median(simu_res_pinf[[i]]$time_to_50, na.rm=T), col="red", lty=3, lwd=3)
+}
+```
+
+```{r}
+pinf_data<-do.call(rbind, simu_res_pinf)#complete data sets from each simulation
+pinf_data<- tibble::rownames_to_column(pinf_data)
+pinf_data[c('year', 'rep')] <- str_split_fixed(pinf_data$rowname, pattern='.', n=2)
+```
+
+
+# Plots results of simulation per year
+```{r}
+ydata_sub90 <- subset(all_data, metric=="90")
+ydata_sub50 <- subset(all_data, metric=="50")
+
+cols90 <- c("mean", "sd", "skew")
+
+par(mfrow=c(2,3), mar=c(4,4,2,2), cex=1.25)
+for (i in cols90){
+  stripchart(ydata_sub90[,i]~ydata_sub90$sp, pch=19, col=colours[as.numeric(ydata_sub90$col)], method="jitter", jitter=0.1, ylab="Species", xlab=paste(i, "simulation cycles\n\ until 90% infected", sep=" "))
+}
+
+for (i in cols90){
+  stripchart(ydata_sub50[,i]~ydata_sub50$sp, pch=19, col=colours[as.numeric(ydata_sub90$col)], method="jitter", jitter=0.1, ylab="Species", xlab=paste(i, "simulation cycles\n\ until 50% infected", sep=" "))
+}
+```
+
+
+
+```{r}
+save.image(file="/Users/alba/Library/Mobile Documents/com~apple~CloudDocs/Cayo-Maria-Disease-Modeling/macaque_disease_simulation.RData")
+```
+
+
+and Pdeath=0.112/0.09
