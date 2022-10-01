@@ -47,97 +47,37 @@ for (i in 1:length(yearsV)){
 }
 names(V.data.list)<-yearsV
 ```
-
-## Simulation seedless and Pt=1
+Change 0s to min because the 0s might be a sampling artifact and it is not realistic the assume that because two monkeys were never observed in proximity they never were.
 ```{r}
+for (i in 1:length(V.data.list)){
+  V.data.list[[i]]$weight<-replace(V.data.list[[i]]$weight, V.data.list[[i]]$weight == 0, 0.0001)
+}
 
-list_df=V.data.list
-reps=10#number of times the simulation should be repeated
-#at each simulation time step, two individuals will interact according their probability of proxomity (edge weight). In each time step, all possible dyads are considered.
-sims=1000#number of time steps/times each dyad should be allowed to potentially interact/scans
-simu_res = replicate(6, NA, simplify = F)#storing object for simulation results
-list_names=yearsV
-
-simu_res<-foreach(d=1:length(list_df))%dopar%{
-  #for each year...
-        df <- list_df[[d]]
-        #calculate group size
-        N=length(unique(unlist(df$ID1, df$ID2)))
-        #create adjancecy matrix
-        mygraph <- graph.data.frame(df)
-        my_mat<-get.adjacency(mygraph, sparse = FALSE, attr='weight')
-        #next line optional but ensures lower tri is NAs
-        my_mat[lower.tri(my_mat)] <- NA
-        #empty vectors for simulation results
-            value90 <- rep(NA, reps)
-            value50 <- rep(NA, reps)
-            value60 <- rep(NA, reps)
-            value70 <- rep(NA, reps)
-            value80 <- rep(NA, reps)
-            props <- rep(NA, sims)
-            for (r in 1:reps){
-            #create vector to store the health status of each individual at each simulation step (sim)
-              health=rep(0, N)
-            #infect a random individual, change its status to infected in health vector
-              health[floor(runif(1, min=1, max=N+1))]=1
-              for(s in 1:sims){
-            #create new vector where infected individuals ID are stored after each iteraction over the matrix
-              health_update=c()
-              #iterate over upper triangle matrix
-                for(i in 1:(N-1)){
-                  for(j in (i+1):N){
-                    #if one of the two individuals considered is infected..
-                    if(sum(health[i],health[j])==1){
-                    #evaluate whether they interact according to edge weight
-                     if(runif(n=1)<my_mat[i,j]){
-                      #if they interact, infect the healthy individual by adding its id to the updates vector
-                      health_update <- append(health_update,c(i,j))
-                      }
-                    }
-                  }
-                }
-              #change the status of the newly infected individuals in the health status vector
-              health_unique<- unique(health_update)
-              for (h in health_unique){
-                health[h]=1
-              }
-              #calculate proportion of infected individuals in each simulation step (sims)
-              props[s]<- sum(health)/length(health)  
-              }
-            #write down at which simulation step different thresholds of proportions of individuals infected were reached for each repetition of the simulation (reps)
-            value90[r] <- which(props >= 0.9)[1]
-            value80[r] <- which(props >= 0.8)[1]
-            value70[r] <- which(props >= 0.7)[1]
-            value60[r] <- which(props >= 0.6)[1]
-            value50[r] <- which(props >= 0.5)[1]
-            }
-            #store simulation steps at which thresholds were reached in each repetition of the simulation into list
-        simu_res[[d]]<- data.frame("time_to_90"=value90, 
-                                              "time_to_50"=value50, 
-                                              "time_to_80"=value80, 
-                                              "time_to_70"=value70, 
-                                              "time_to_60"=value60)
-    }
-#name data frames in list with year names
-names(simu_res)<-list_names
-parallel::stopCluster(cl = my.cluster)
+mins<-rep(NA, 6)
+for (i in 1:length(V.data.list)){
+  mins[i]<-min(V.data.list[[i]]$weight, na.rm = T)
+}
+mins
 ```
 
-## Simulation seedless, Pi=0.1
+## Simulation seedless, Pi=0.1, 0.01 and 0.2
 Bulfone et al. 2021 Journal of Infections Diseases DOI:10.1093/infdis/jiaa742
 Razani et al. 2021 Journal of Infections Diseases https://doi.org/10.1093/infdis/jiab298
 Young et al. 2022 The Lancet DOI:https://doi.org/10.1016/S1473-3099(20)30911-7
 
 ```{r}
 list_df=V.data.list
-reps=1000#number of times the simulation should be repeated
-#at each simulation time step, two individuals will interact according their probability of proxomity (edge weight). In each time step, all possible dyads are considered.
-sims=10000#number of time steps/times each dyad should be allowed to potentially interact/scans
-simu_res = replicate(6, NA, simplify = F)#storing object for simulation results
+reps=5#number of times the simulation should be repeated
+#at each simulation time step, two individuals will interact according to their probability of proxomity (edge weight). In each time step, all possible dyads are considered.
+sims=1000#number of time steps/times each dyad should be allowed to potentially interact/scans
+simu_res = list()#storing object for simulation results
+props_res=data.frame(matrix(NA, nrow = sims, ncol = reps))
+props_res_list= list()
 list_names=yearsV
-pinf=0.1
+pinfs=c(0.01, 0.1, 0.2)
 
-simu_res_pinf<-foreach(d=1:length(list_df))%dopar%{
+
+simu_res_pinf<-foreach(d=1:length(list_df))%:% foreach(pinf=pinfs)%dopar%{
   #for each year...
         df <- list_df[[d]]
         #calculate group size
@@ -148,6 +88,7 @@ simu_res_pinf<-foreach(d=1:length(list_df))%dopar%{
         #next line optional but ensures lower tri is NAs
         my_mat[lower.tri(my_mat)] <- NA
         #empty vectors for simulation results
+            value100 <- rep(NA, reps)
             value90 <- rep(NA, reps)
             value50 <- rep(NA, reps)
             value60 <- rep(NA, reps)
@@ -188,24 +129,91 @@ simu_res_pinf<-foreach(d=1:length(list_df))%dopar%{
               props[s]<- sum(health)/length(health)  
               }
             #write down at which simulation step different thresholds of proportions of individuals infected were reached for each repetition of the simulation (reps)
+            value100[r] <- which(props == 1)[1]
             value90[r] <- which(props >= 0.9)[1]
             value80[r] <- which(props >= 0.8)[1]
             value70[r] <- which(props >= 0.7)[1]
             value60[r] <- which(props >= 0.6)[1]
             value50[r] <- which(props >= 0.5)[1]
-            maxprop[r] <- max(props) 
+            maxprop[r] <- max(props)
+           #store proportion of infected individuals at each simulation step for each repetition of the simulation (reps) 
+            props_res[, r]<-props
             }
             #store simulation steps at which thresholds were reached in each repetition of the simulation into list
-        simu_res[[d]]<- data.frame("time_to_90"=value90, 
-                                              "time_to_50"=value50, 
-                                              "time_to_80"=value80, 
-                                              "time_to_70"=value70, 
-                                              "time_to_60"=value60,
-                                               "max_infected"=maxprop)
+        simu_res[[d]]<- list(data.frame("time_to_100"=value100,
+                                   "time_to_90"=value90, 
+                                    "time_to_50"=value50, 
+                                    "time_to_80"=value80, 
+                                    "time_to_70"=value70, 
+                                    "time_to_60"=value60,
+                                    "max_infected"=maxprop), props_res) 
+        
     }
 #name data frames in list with year names
 names(simu_res_pinf)<-list_names
+
+for (i in 1:6){
+  names(simu_res_pinf[[i]]) <- pinfs
+}
 ```
+
+#Run 1 rep of the simulation to obtain IDs for plotting
+```{r}
+simu_res=list()
+sims=1000
+simu_res_ids<-foreach(d=1:length(list_df))%:% foreach(pinf=pinfs)%dopar%{
+  #for each year...
+        df <- list_df[[d]]
+        #calculate group size
+        N=length(unique(unlist(df$ID1, df$ID2)))
+        #create adjancecy matrix
+        mygraph <- graph.data.frame(df)
+        my_mat<-get.adjacency(mygraph, sparse = FALSE, attr='weight')
+        #next line optional but ensures lower tri is NAs
+        my_mat[lower.tri(my_mat)] <- NA
+        #empty vectors for simulation results
+            #create vector to store the health status of each individual at each simulation step (sim)
+        inf_ids_df=data.frame(matrix(NA, nrow = N, ncol = sims))
+              health=rep(0, N)
+            #infect a random individual, change its status to infected in health vector
+              health[floor(runif(1, min=1, max=N+1))]=1
+              for(s in 1:sims){
+            #create new vector where infected individuals ID are stored after each iteraction over the matrix
+              health_update=c()
+              #iterate over upper triangle matrix
+                for(i in 1:(N-1)){
+                  for(j in (i+1):N){
+                    #if one of the two individuals considered is infected..
+                    if(sum(health[i],health[j])==1){
+                    #evaluate whether they interact according to edge weight
+                     if(runif(n=1)<my_mat[i,j]){
+                      #if they interact, evaluate whether it gets infected. If it does...
+                       if(runif(n=1)<pinfs){
+                         #update its status to infected in the updates' vector
+                        health_update <- append(health_update,c(i,j))
+                       }
+                      }
+                    }
+                  }
+                }
+              #change the status of the newly infected individuals in the health status vector
+              health_unique<- unique(health_update)
+              for (h in health_unique){
+                health[h]=1
+              }
+              inf_ids_df[, s]<-health
+              }
+            #store simulation steps at which thresholds were reached in each repetition of the simulation into list
+        #inf_ids_df$ids<- colnames(my_mat)
+        simu_res[d]<- inf_ids_df
+        
+}
+#name data frames in list with year names
+names(simu_res_ids)<-list_names
+
+
+```
+ 
 
 I was getting an error of invalid connection and running this chunked fixed it
 ```{r}
