@@ -47,7 +47,7 @@ for (i in 1:length(yearsV)){
 }
 names(V.data.list)<-yearsV
 ```
-Change 0s to min because the 0s might be a sampling artifact and it is not realistic the assume that because two monkeys were never observed in proximity they never were.
+Change 0s to 0.0001 because the 0s might be a sampling artifact and it is not realistic the assume that because two monkeys were never observed in proximity they never were.
 ```{r}
 for (i in 1:length(V.data.list)){
   V.data.list[[i]]$weight<-replace(V.data.list[[i]]$weight, V.data.list[[i]]$weight == 0, 0.0001)
@@ -163,9 +163,9 @@ simu_res=list()
 sims=1000
 simu_res_ids<-foreach(d=1:length(list_df))%:% foreach(pinf=pinfs)%dopar%{
   #for each year...
-        df <- list_df[[d]]
+        df <- list_df[[1]]
         #calculate group size
-        N=length(unique(unlist(df$ID1, df$ID2)))
+        N=length(unique(unlist(df$ID1, df$ID2)))+1#emergency "fix"
         #create adjancecy matrix
         mygraph <- graph.data.frame(df)
         my_mat<-get.adjacency(mygraph, sparse = FALSE, attr='weight')
@@ -210,8 +210,17 @@ simu_res_ids<-foreach(d=1:length(list_df))%:% foreach(pinf=pinfs)%dopar%{
 }
 #name data frames in list with year names
 names(simu_res_ids)<-list_names
+for (i in 1:6){
+  names(simu_res_ids[[i]]) <- pinfs
+}
 
-
+for (i in 1:length(simu_res_ids)){
+  for (j in 1:length(simu_res_ids[[i]])){
+   x=simu_res_ids[[i]][[j]]
+  x=cbind(x, ids=colnames(my_mat))
+  simu_res_ids[[i]][[j]]=x
+  }
+}
 ```
  
 
