@@ -247,13 +247,14 @@ for (i in 1:length(simu_res_ids)){
 ```{r}
 
 network_sims<-foreach(d=1:length(list_df))%dopar%{
-   df <- list_df[[d]]
+   df <- list_df[[1]]
    for (s in 1:sims){
      new.vec=c()
      for(i in 1:nrow(df)){
-          new.vec[i]<-ifelse(runif(n=1)<df[i,"weight"], 1, 0)
+          new.vec[i]<-ifelse(runif(n=1)<df[3,"weight"], 1, 0)
      }
    df<-cbind(df, new.vec)
+   
             
    
 ```
