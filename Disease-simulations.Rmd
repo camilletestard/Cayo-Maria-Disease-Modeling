@@ -25,7 +25,8 @@ doParallel::registerDoParallel(cl = my.cluster)
 
 ```{r}
 #read data
-load("~/Library/Mobile Documents/com~apple~CloudDocs/Cayo-Maria-Disease-Modeling/Data/R.Data/proximity_data.RData")
+# load("~/Library/Mobile Documents/com~apple~CloudDocs/Cayo-Maria-Disease-Modeling/Data/R.Data/proximity_data.RData")
+load("Data/R.Data/proximity_data.RData")
 #create weight variable. Proportion of scans observed in proximity
 edgelist.all$weight<- edgelist.all$count/edgelist.all$total_samples
 table(edgelist.all$group, edgelist.all$year)#S group is only observed one year and both KK and F are only observed one year after the huricane.
