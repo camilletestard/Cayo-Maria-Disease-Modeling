@@ -45,15 +45,16 @@ V.data%>%group_by(year)%>%summarise(N=length(unique(unlist(ID1,ID2))))
 V.data<-subset(V.data, select=c("ID1", "ID2", "weight", "year"))
 #create different data frames for each year and combine into one list V.data.list
 yearsV<-unique(V.data$year)
-V.data.list<-list()
+V.data.list.raw<-list()
 for (i in 1:length(yearsV)){
-   V.data.list[[i]]<-subset(V.data, year==yearsV[i])
+   V.data.list.raw[[i]]<-subset(V.data, year==yearsV[i])
 }
-names(V.data.list)<-yearsV
-V.data.list<-lapply(V.data.list, function(x) x[!(names(x) %in% c("year"))])
+names(V.data.list.raw)<-yearsV
+V.data.list.raw<-lapply(V.data.list.raw, function(x) x[!(names(x) %in% c("year"))])
 ```
 Change 0s to 0.0001 because the 0s might be a sampling artifact and it is not realistic the assume that because two monkeys were never observed in proximity they never were.
 ```{r}
+V.data.list<-V.data.list.raw
 for (i in 1:length(V.data.list)){
   V.data.list[[i]]$weight<-replace(V.data.list[[i]]$weight, V.data.list[[i]]$weight == 0, 0.0001)
 }
@@ -74,7 +75,7 @@ Young et al. 2022 The Lancet DOI:https://doi.org/10.1016/S1473-3099(20)30911-7
 list_df=V.data.list
 reps=5#number of times the simulation should be repeated
 #at each simulation time step, two individuals will interact according to their probability of proxomity (edge weight). In each time step, all possible dyads are considered.
-sims=1000#number of time steps/times each dyad should be allowed to potentially interact/scans
+sims=10000#number of time steps/times each dyad should be allowed to potentially interact/scans
 simu_res = list()#storing object for simulation results
 props_res=data.frame(matrix(NA, nrow = sims, ncol = reps))
 props_res_list= list()
@@ -168,7 +169,7 @@ list_df=V.data.list
 list_names=yearsV
 pinfs=c(0.01, 0.1, 0.2)
 simu_res=list()
-sims=1000
+sims=10000
 simu_res_ids<-foreach(d=1:length(list_df))%:% foreach(pinf=pinfs)%dopar%{
   #for each year...
         df <- list_df[[d]]
@@ -243,44 +244,23 @@ for (i in 1:length(simu_res_ids)){
 ```
  
 
-#Network simulations to calculate network properties
-```{r}
-
-network_sims<-foreach(d=1:length(list_df))%dopar%{
-   df <- list_df[[1]]
-   for (s in 1:sims){
-     new.vec=c()
-     for(i in 1:nrow(df)){
-          new.vec[i]<-ifelse(runif(n=1)<df[3,"weight"], 1, 0)
-     }
-   df<-cbind(df, new.vec)
-   
-            
-   
-```
-
-
 #Calculate network properties for each year
 Modularity, Clustering, Density
 ```{r}
-network_char<- data.frame( diameter= c(),densities=c(), clustering=c()) 
+network_char<- data.frame(densities=c(), modularity_fg=c()) 
+list_df<-V.data.list.raw
 
 for(d in 1:length(list_df)){
-    df <- list_df[[1]]
+    df <- list_df[[d]]
       #create adjancency matrix from edgelist
-    mygraph <- igraph::graph.data.frame(df, directed=F)#create graph from data frame
-    #diameter
-    diameter_res<- igraph::diameter(mygraph,  unconnected = F, weights = df$weight)
-    network_char[d, "diameter"]=diameter_res
-    #efficiency
-    #efficiency_res<-igraph::global_efficiency(mygraph, weights = df$weight, directed = F)
-    #network_char[d, "efficiency"]=efficiency_res#normalized
+    mygraph <- igraph::graph_from_data_frame(df, directed=F)#create graph from data frame
     #density
-    density_res<-igraph::edge_density(mygraph, loops = F)
+    density_res<-sum(df$weight>0)/nrow(df)
     network_char[d, "densities"]=density_res
     #clustering
-    clustering_coeffs<-mean(igraph::transitivity(mygraph, type="weighted"))
-    network_char[d, "clustering"]=clustering_coeffs
+    modularity_res_fg<-cluster_fast_greedy(mygraph, modularity = T, membership = T)
+    modularity_res_fg<-max(modularity_res_fg$modularity)
+    network_char[d, "modularity_fg"]=modularity_res_fg
     network_char[d, "year"]=names(list_df[d])
 }
 ```
