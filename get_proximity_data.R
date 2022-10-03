@@ -25,7 +25,7 @@ groupyears = c("F2015","V2015","KK2015",
                "KK2017","V2017","V2018","KK2018",
                "S2019","V2019","F2021","V2021")
 
-gy=8#16
+gy=12#16
 edgelist.all = data.frame()
 savePath = '~/Documents/GitHub/Cayo-Maria-Disease-Modeling/Data/R.Data/'
 
@@ -194,6 +194,10 @@ for (gy in 1:length(groupyears)){ #for all group & years
   # Merge and save data
   edgelist.all = rbind(edgelist.all, df_obs_agg)
 }
+
+# #Check V2019 data is normal
+# df = edgelist.all[edgelist.all$group=="V" & edgelist.all$year=="2015",]
+# length(which(df$count!=0))/nrow(df)
 
 #extract the number of unique IDs
 unique_names <- unique(c(df_obs_agg$ID1, df_obs_agg$ID2))
