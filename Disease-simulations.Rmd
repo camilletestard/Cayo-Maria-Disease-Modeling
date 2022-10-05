@@ -1,14 +1,13 @@
 ---
 title: "Disease_simu_cayo"
 author: "Alba Motes Rodrigo"
-date: "07/09/2022"
+date: "05/10/2022"
 output: html_document
 editor_options: 
   chunk_output_type: inline
 ---
-chapf
 
-```{r}
+```{r, warning=FALSE, message=F}
 library(dplyr)
 library(igraph)
 library(foreach)
@@ -52,7 +51,7 @@ for (i in 1:length(yearsV)){
 names(V.data.list.raw)<-yearsV
 V.data.list.raw<-lapply(V.data.list.raw, function(x) x[!(names(x) %in% c("year"))])
 ```
-Change 0s to 0.0001 because the 0s might be a sampling artifact and it is not realistic the assume that because two monkeys were never observed in proximity they never were.
+Change 0s to 0.0001 because the 0s might be a sampling artifact and it is not realistic the assume that because two monkeys were never observed in proximity they never were.Data sets without 0s are saved as V.data.list. V.data.raw has 0s.
 ```{r}
 V.data.list<-V.data.list.raw
 for (i in 1:length(V.data.list)){
@@ -86,7 +85,6 @@ pinfs=c(0.01, 0.1, 0.2)
 simu_res_pinf<-foreach(d=1:length(list_df))%:% foreach(pinf=pinfs)%dopar%{
   #for each year...
         df <- list_df[[d]]
-        
         #create adjancecy matrix
         mygraph <- graph.data.frame(df)
         my_mat<-get.adjacency(mygraph, sparse = FALSE, attr='weight')
@@ -107,6 +105,7 @@ simu_res_pinf<-foreach(d=1:length(list_df))%:% foreach(pinf=pinfs)%dopar%{
             #create vector to store the health status of each individual at each simulation step (sim)
               health=rep(0, N)
             #infect a random individual, change its status to infected in health vector
+              set.seed(1)
               health[floor(runif(1, min=1, max=N+1))]=1
               for(s in 1:sims){
             #create new vector where infected individuals ID are stored after each iteraction over the matrix
@@ -185,6 +184,7 @@ simu_res_ids<-foreach(d=1:length(list_df))%:% foreach(pinf=pinfs)%dopar%{
         inf_ids_df=data.frame(matrix(NA, nrow = N, ncol = sims))
               health=rep(0, N)
             #infect a random individual, change its status to infected in health vector
+              set.seed(1)
               health[floor(runif(1, min=1, max=N+1))]=1
               for(s in 1:sims){
             #create new vector where infected individuals ID are stored after each iteraction over the matrix
@@ -283,7 +283,7 @@ names(betweenness_data)<-list_names
 names(seeds_betweenness)<-list_names
 ```
 
-
+## Simulation seeded, Pi=0.1, 0.01 and 0.2
 ```{r}
 list_df=V.data.list
 reps=5#number of times the simulation should be repeated
@@ -320,6 +320,7 @@ simu_seeded_res_pinf<-foreach(d=1:length(list_df)) %:% foreach(pinf=pinfs)%dopar
               health=rep(0, N)
               names(health)<-names(betweenness_data[[d]])
             #infect a random individual, change its status to infected in health vector
+              set.seed(1)
               health[names(sample(seeds_betweenness[[d]], size=1))]=1
               for(s in 1:sims){
             #create new vector where infected individuals ID are stored after each iteraction over the matrix
