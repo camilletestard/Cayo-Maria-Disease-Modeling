@@ -103,7 +103,7 @@ V.data.list <- V.data.list.raw
 # 
 
 mins <- V.data.list %>% map(~min(.x$weight))
-  
+
 list_names = yearsV
 
 mins
@@ -126,140 +126,152 @@ props_res_list = list()
 pinfs = c(0.01, 0.1, 0.2)
 
 d = 1
-pinf = 0.01
+# pinf = 0.01
+pinf = 0.2
 
 r <- 1
 
 # simu_res_pinf <- foreach(d = 1:length(list_df)) %:% foreach(pinf = pinfs) %dopar% {
-  #for each year...
-  df <- list_df[[d]]
-  #create adjancecy matrix
-  mygraph <- graph.data.frame(df, directed = F)
-  my_mat <- get.adjacency(mygraph, sparse = FALSE, attr='weight')
-  #calculate group size
-  N = length(colnames(my_mat))
+#for each year...
+df <- list_df[[d]]
+#create adjancecy matrix
+mygraph <- graph.data.frame(df, directed = F)
+my_mat <- get.adjacency(mygraph, sparse = FALSE, attr='weight')
+#calculate group size
+N = length(colnames(my_mat))
+
+#next line optional but ensures lower tri is NAs
+# my_mat[lower.tri(my_mat)] <- NA
+#empty vectors for simulation results
+value100 <- rep(NA, reps)
+value90 <- rep(NA, reps)
+value50 <- rep(NA, reps)
+value60 <- rep(NA, reps)
+value70 <- rep(NA, reps)
+value80 <- rep(NA, reps)
+maxprop <- rep(NA, reps)
+props <- rep(NA, sims)
+
+IndivList <- list()
+
+for (r in 1:reps){
   
-  #next line optional but ensures lower tri is NAs
-  # my_mat[lower.tri(my_mat)] <- NA
-  #empty vectors for simulation results
-  value100 <- rep(NA, reps)
-  value90 <- rep(NA, reps)
-  value50 <- rep(NA, reps)
-  value60 <- rep(NA, reps)
-  value70 <- rep(NA, reps)
-  value80 <- rep(NA, reps)
-  maxprop <- rep(NA, reps)
-  props <- rep(NA, sims)
+  print(r)
   
-  for (r in 1:reps){
+  #create vector to store the health status of each individual at each simulation step (sim)
+  
+  health = rep(0, N)
+  
+  #infect a random individual, change its status to infected in health vector
+  
+  health[floor(runif(1, min = 1, max = N + 1))] = 1
+  
+  Indivs <- data.frame(ID = colnames(my_mat), Health = health, Time = health - 1)
+  
+  Network <- my_mat
+  
+  for(s in 1:sims){
     
-    #create vector to store the health status of each individual at each simulation step (sim)
+    #create new vector where infected individuals ID are stored after each iteraction over the matrix
     
-    health = rep(0, N)
+    health_update = c()
     
-    #infect a random individual, change its status to infected in health vector
+    #iterate over upper triangle matrix
     
-    health[floor(runif(1, min = 1, max = N + 1))] = 1
+    # for(i in 1:(N-1)){
+    #   
+    #   for(j in (i+1):N){
+    #     
+    #     #if one of the two individuals considered is infected..
+    #     
+    #     if(sum(health[i], health[j]) == 1){
+    #       
+    #       #evaluate whether they interact according to edge weight
+    #       if(runif(n = 1) < my_mat[i,j]){
+    #         
+    #         #if they interact, evaluate whether it gets infected. If it does...
+    #         if(runif(n = 1) < pinf){
+    #           
+    #           #update its status to infected in the updates' vector
+    #           health_update <- append(health_update, c(i,j))
+    #           
+    #         }
+    #       }
+    #     }
+    #   }
+    # }
     
-    Indivs <- data.frame(ID = colnames(my_mat), Health = health, Time = health - 1)
+    TransmissionMatrix <- array(0, dim = dim(Network))
     
-    Network <- my_mat
+    I2 <- which(Indivs$Health > 0) # Identifying infected
     
-    for(s in 1:sims){
+    NPairs <- which(Network[I2,]>0)
+    
+    # TransmissionMatrix[I2,][NPairs] <- rbinom(length(NPairs), 1, S_I)
+    # TransmissionMatrix[I2,][NPairs] <- runif(length(NPairs), 0, 1) < Network[I2,][NPairs]
+    
+    TransmissionMatrix[I2,][NPairs] <- rbinom(length(NPairs), 1, Network[I2,][NPairs])*
+      as.numeric(runif(Network[I2,][NPairs], 0, 1) < pinf)
+    
+    if(is.vector(TransmissionMatrix)){
       
-      #create new vector where infected individuals ID are stored after each iteraction over the matrix
+      Infected <- which(TransmissionMatrix > 0)# %>% as.numeric()
       
-      health_update = c()
+    }else{
       
-      #iterate over upper triangle matrix
-      
-      # for(i in 1:(N-1)){
-      #   
-      #   for(j in (i+1):N){
-      #     
-      #     #if one of the two individuals considered is infected..
-      #     
-      #     if(sum(health[i], health[j]) == 1){
-      #       
-      #       #evaluate whether they interact according to edge weight
-      #       if(runif(n = 1) < my_mat[i,j]){
-      #         
-      #         #if they interact, evaluate whether it gets infected. If it does...
-      #         if(runif(n = 1) < pinf){
-      #           
-      #           #update its status to infected in the updates' vector
-      #           health_update <- append(health_update, c(i,j))
-      #           
-      #         }
-      #       }
-      #     }
-      #   }
-      # }
-      
-      TransmissionMatrix <- array(0, dim = dim(Network))
-      
-      I2 <- which(Indivs$Health > 0) # Identifying infected
-      
-      NPairs <- which(Network[I2,]>0)
-      
-      # TransmissionMatrix[I2,][NPairs] <- rbinom(length(NPairs), 1, S_I)
-      TransmissionMatrix[I2,][NPairs] <- runif(length(NPairs), 0, 1) < Network[I2,][NPairs]
-      
-      if(is.vector(TransmissionMatrix)){
-        
-        Infected <- which(TransmissionMatrix > 0)# %>% as.numeric()
-        
-      }else{
-        
-        Infected <- which(colSums(TransmissionMatrix) > 0)# %>% as.numeric()
-        
-      }
-      
-      NewlyInfected <- setdiff(Infected, Indivs[Indivs$Health == 1, "ID"])
-      
-      if(length(NewlyInfected) > 0){
-        
-        Indivs[NewlyInfected, "Time"] <- s
-        
-      }
-      
-      # #change the status of the newly infected individuals in the health status vector
-      # 
-      # health_unique <- unique(health_update)
-      # 
-      # for (h in health_unique){
-      #   health[h] = 1
-      # }
-      # 
-      # #calculate proportion of infected individuals in each simulation step (sims)
-      # props[s]<- sum(health)/length(health)  
+      Infected <- which(colSums(TransmissionMatrix) > 0)# %>% as.numeric()
       
     }
     
-    #write down at which simulation step different thresholds of proportions of individuals infected were reached for each repetition of the simulation (reps)
-    value100[r] <- which(props == 1)[1]
-    value90[r] <- which(props >= 0.9)[1]
-    value80[r] <- which(props >= 0.8)[1]
-    value70[r] <- which(props >= 0.7)[1]
-    value60[r] <- which(props >= 0.6)[1]
-    value50[r] <- which(props >= 0.5)[1]
-    maxprop[r] <- max(props)
+    NewlyInfected <- setdiff(Infected, Indivs[Indivs$Health == 1, "ID"])
     
-    #store proportion of infected individuals at each simulation step for each repetition of the simulation (reps) 
-    props_res[, r]<-props
+    if(length(NewlyInfected) > 0){
+      
+      Indivs[NewlyInfected, "Time"] <- s
+      Indivs[NewlyInfected, "Health"] <- 1
+      
+    }
+    
+    # #change the status of the newly infected individuals in the health status vector
+    # 
+    # health_unique <- unique(health_update)
+    # 
+    # for (h in health_unique){
+    #   health[h] = 1
+    # }
+    # 
+    # #calculate proportion of infected individuals in each simulation step (sims)
+    # props[s]<- sum(health)/length(health)  
     
   }
   
-  #store simulation steps at which thresholds were reached in each repetition of the simulation into list
-  simu_res[[d]]<- list(data.frame("time_to_100"=value100,
-                                  "time_to_90"=value90, 
-                                  "time_to_50"=value50, 
-                                  "time_to_80"=value80, 
-                                  "time_to_70"=value70, 
-                                  "time_to_60"=value60,
-                                  "max_infected"=maxprop), props_res) 
+  IndivList[[r]] <- Indivs
+  
+  # #write down at which simulation step different thresholds of proportions of individuals infected were reached for each repetition of the simulation (reps)
+  # value100[r] <- which(props == 1)[1]
+  # value90[r] <- which(props >= 0.9)[1]
+  # value80[r] <- which(props >= 0.8)[1]
+  # value70[r] <- which(props >= 0.7)[1]
+  # value60[r] <- which(props >= 0.6)[1]
+  # value50[r] <- which(props >= 0.5)[1]
+  # maxprop[r] <- max(props)
+  # 
+  # #store proportion of infected individuals at each simulation step for each repetition of the simulation (reps) 
+  # props_res[, r]<-props
   
 }
+
+#store simulation steps at which thresholds were reached in each repetition of the simulation into list
+simu_res[[d]]<- list(data.frame("time_to_100"=value100,
+                                "time_to_90"=value90, 
+                                "time_to_50"=value50, 
+                                "time_to_80"=value80, 
+                                "time_to_70"=value70, 
+                                "time_to_60"=value60,
+                                "max_infected"=maxprop), props_res) 
+
+}
+
 #name data frames in list with year names
 names(simu_res_pinf)<-list_names
 
