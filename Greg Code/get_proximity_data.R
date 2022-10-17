@@ -18,7 +18,6 @@ library(ggplot2)
 # setwd("~/Documents/GitHub/Cayo-Maria-Disease-Modeling/")
 source("Greg Code/Functions/functions_GlobalNetworkMetrics.R")
 
-
 group = c("F","V","KK","V","F","F","KK","V","V","KK","S","V","F","V")
 years = c(2015,2015,2015,
           2016,2016,2017,2017,2017,
@@ -30,7 +29,11 @@ groupyears = c("F2015","V2015","KK2015",
 
 gy=12#16
 edgelist.all = data.frame()
-savePath = '~/Documents/GitHub/Cayo-Maria-Disease-Modeling/Data/R.Data/'
+savePath = 'Greg Data/R.Data/'
+
+library(fs)
+
+dir_create("Greg Data")
 
 for (gy in 1:length(groupyears)){ #for all group & years
   
@@ -119,15 +122,17 @@ for (gy in 1:length(groupyears)){ #for all group & years
     ############################################################################ 
     
     #Load data
-    setwd('~/Documents/GitHub/Cayo-Maria-Disease-Modeling/Data/Data All Cleaned/BehavioralDataFiles')
-    prox_data = read.csv(paste("Group",groupyears[gy],"_ProximityGroups.txt", sep = ""))
-    meta_data = read.csv(paste("Group",groupyears[gy],"_GroupByYear.txt", sep = "")) #load meta data
+    setwd('Greg Data/Data All Cleaned/BehavioralDataFiles')
+    prox_data = read.csv(paste("Group", groupyears[gy], "_ProximityGroups.txt", sep = ""))
+    meta_data = read.csv(paste("Group", groupyears[gy], "_GroupByYear.txt", sep = "")) #load meta data
+    
     #cleaned_data = read.csv(paste("Group",groupyears[gy],"_CleanedData.txt", sep = ""))
     
     #Set NA focal activity in scans to "Rest"
-    prox_data$focal.activity[is.na(prox_data$focal.activity)]="rest"
     
-    if (groupyears[gy]=="HH2016"){
+    prox_data$focal.activity[is.na(prox_data$focal.activity)] <- "rest"
+    
+    if (groupyears[gy] == "HH2016"){
       #Add HH dominance for subadults. 
       hh.dominance <- read.csv("HH_Dominance.csv");names(hh.dominance)[1]="id"
       hh.dominance$id = as.character(hh.dominance$id)
@@ -140,7 +145,7 @@ for (gy in 1:length(groupyears)){ #for all group & years
       meta_data[,c("ordinal.rank","percofsex.dominanted")]=hh.dominance[match(meta_data$id, hh.dominance$id),c("ordinal.rank","percofsex.domianted")]
     }
     
-    if (groupyears[gy]=="KK2017"){
+    if (groupyears[gy] == "KK2017"){
       #Add HH dominance for juveniles. 
       kk.dominance <- read.csv("KK_dominance_withSubadults.csv");names(kk.dominance)[1]="id"
       
@@ -148,54 +153,87 @@ for (gy in 1:length(groupyears)){ #for all group & years
     }
     
     if (groupyears[gy] == "V2019"){ #quick fix for now
+      
       prox_idx = !is.na(prox_data$partners.activity..sequential.) #find indices where there are individuals in proximity
+      
       #add focal monkey in proximity column
-      prox_data$in.proximity[prox_idx]= paste(prox_data$focal.monkey[prox_idx], 
-                                              prox_data$in.proximity[prox_idx],sep=",")
+      
+      prox_data$in.proximity[prox_idx] <- paste(prox_data$focal.monkey[prox_idx], 
+                                                prox_data$in.proximity[prox_idx], sep = ",")
+      
     }
     
   } #end of year clause (2018 vs. other)
   
-  #Format data with aggregate format
-  # Output the Master Edgelist of all possible pairs given the unique IDs.
-  unqIDs = meta_data$id#[meta_data$focalcutoff_met=="Y"]
-  edgelist = calcMasterEL(unqIDs);
-  df_obs_agg  = calcEdgeList(prox_data, edgelist); ##IMPORTANT NOTE: the structure of the proximity data is different for 
-  #2018 relative to other years (the focal ID is not counted in proximity for 2018 but it is for other years)
-  #This is not a problem because the focal ID column name is not the same so the function works properly as is.
-  names(df_obs_agg)=c("ID1", "ID2", "dyad_id","count")
+  # #Format data with aggregate format
+  # # Output the Master Edgelist of all possible pairs given the unique IDs.
+  # unqIDs = meta_data$id#[meta_data$focalcutoff_met=="Y"]
+  # edgelist = calcMasterEL(unqIDs);
+  # df_obs_agg  = calcEdgeList(prox_data, edgelist); ##IMPORTANT NOTE: the structure of the proximity data is different for 
+  # #2018 relative to other years (the focal ID is not counted in proximity for 2018 but it is for other years)
+  # #This is not a problem because the focal ID column name is not the same so the function works properly as is.
+  # names(df_obs_agg)=c("ID1", "ID2", "dyad_id","count")
+  # 
+  # library(magrittr)
+  # 
+  # df_obs_agg %<>% arrange(ego, alter)
+  # 
+  # prox_data
   
+  EdgeList <- 
+    prox_data %>% 
+    dplyr::select(focal.monkey, in.proximity) %>% 
+    mutate_at("in.proximity", ~str_split(.x %>% str_remove(" "), ",")) %>% 
+    unnest(in.proximity)
   
-  #Get observation effort for each dyad
-  if (years[gy]==2018){numscans = as.data.frame(table(prox_data$focalID))}else{ numscans = as.data.frame(table(prox_data$focal.monkey))}
+  df_obs_agg <- 
+    EdgeList %>% 
+    count(focal.monkey, in.proximity) %>% 
+    arrange(focal.monkey, in.proximity)
   
-  df_obs_agg$ID1_obseff_duration = meta_data$hrs.focalfollowed[match(df_obs_agg$ID1, meta_data$id)]
-  df_obs_agg$ID1_obseff_samples = numscans$Freq[match(df_obs_agg$ID1, numscans$Var1)]
-  df_obs_agg$ID2_obseff_duration = meta_data$hrs.focalfollowed[match(df_obs_agg$ID2, meta_data$id)] 
-  df_obs_agg$ID2_obseff_samples = numscans$Freq[match(df_obs_agg$ID2, numscans$Var1)]
-  df_obs_agg$total_obs_time = df_obs_agg$ID1_obseff_duration  + df_obs_agg$ID2_obseff_duration 
-  df_obs_agg$total_samples = df_obs_agg$ID1_obseff_samples + df_obs_agg$ID2_obseff_samples
+  # #Get observation effort for each dyad
+  # if (years[gy]==2018){
+  #   
+  #   numscans = as.data.frame(table(prox_data$focalID))
+  #   
+  # }else{ 
+  #   
+  #   numscans = as.data.frame(table(prox_data$focal.monkey))
+  #   
+  # }
   
-  ## Add id qualifiers
-  #sex
-  df_obs_agg$ID1_sex = meta_data$sex[match(df_obs_agg$ID1, meta_data$id)]
-  df_obs_agg$ID2_sex = meta_data$sex[match(df_obs_agg$ID2, meta_data$id)]
-  #rank
-  df_obs_agg$ID1_rank = meta_data$ordinal.rank[match(df_obs_agg$ID1, meta_data$id)]
-  df_obs_agg$ID2_rank = meta_data$ordinal.rank[match(df_obs_agg$ID2, meta_data$id)]
-  #age
-  df_obs_agg$ID1_age = meta_data$age[match(df_obs_agg$ID1, meta_data$id)]
-  df_obs_agg$ID2_age = meta_data$age[match(df_obs_agg$ID2, meta_data$id)]
-  #group, year, Hurricane status
-  df_obs_agg$group = group[gy]; df_obs_agg$year = years[gy]; 
-  if(years[gy]>2017){df_obs_agg$isPost = "post"}else{df_obs_agg$isPost = "pre"}
-  
-  head(df_obs_agg)
+  # df_obs_agg$ID1_obseff_duration = meta_data$hrs.focalfollowed[match(df_obs_agg$ID1, meta_data$id)]
+  # df_obs_agg$ID1_obseff_samples = numscans$Freq[match(df_obs_agg$ID1, numscans$Var1)]
+  # df_obs_agg$ID2_obseff_duration = meta_data$hrs.focalfollowed[match(df_obs_agg$ID2, meta_data$id)] 
+  # df_obs_agg$ID2_obseff_samples = numscans$Freq[match(df_obs_agg$ID2, numscans$Var1)]
+  # df_obs_agg$total_obs_time = df_obs_agg$ID1_obseff_duration  + df_obs_agg$ID2_obseff_duration 
+  # df_obs_agg$total_samples = df_obs_agg$ID1_obseff_samples + df_obs_agg$ID2_obseff_samples
+  # 
+  # ## Add id qualifiers
+  # #sex
+  # df_obs_agg$ID1_sex = meta_data$sex[match(df_obs_agg$ID1, meta_data$id)]
+  # df_obs_agg$ID2_sex = meta_data$sex[match(df_obs_agg$ID2, meta_data$id)]
+  # #rank
+  # df_obs_agg$ID1_rank = meta_data$ordinal.rank[match(df_obs_agg$ID1, meta_data$id)]
+  # df_obs_agg$ID2_rank = meta_data$ordinal.rank[match(df_obs_agg$ID2, meta_data$id)]
+  # #age
+  # df_obs_agg$ID1_age = meta_data$age[match(df_obs_agg$ID1, meta_data$id)]
+  # df_obs_agg$ID2_age = meta_data$age[match(df_obs_agg$ID2, meta_data$id)]
+  # #group, year, Hurricane status
+  # df_obs_agg$group = group[gy]; df_obs_agg$year = years[gy]; 
+  # if(years[gy]>2017){df_obs_agg$isPost = "post"}else{df_obs_agg$isPost = "pre"}
+  # 
+  # head(df_obs_agg)
   
   
   ###################################################################
+  
   # Merge and save data
+  
   edgelist.all = rbind(edgelist.all, df_obs_agg)
+  
+  
+  
 }
 
 # #Check V2019 data is normal
@@ -207,9 +245,11 @@ unique_names <- unique(c(df_obs_agg$ID1, df_obs_agg$ID2))
 nr_ind <- length(unique_names)
 nr_dyads <- nr_ind*(nr_ind-1)/2 # -1 to remove self-interactions e.g. AA & /2 because undirected so AB = BA
 
-df_obs_agg$ID1 = factor(df_obs_agg$ID1, levels = unique_names); df_obs_agg$ID2 = factor(df_obs_agg$ID2, levels = unique_names); 
-df_obs_agg$ID1_id = as.integer(df_obs_agg$ID1); df_obs_agg$ID2_id = as.integer(df_obs_agg$ID2)
-df_obs_agg$dyad_id = factor(df_obs_agg$dyad_id, levels=df_obs_agg$dyad_id)
+# df_obs_agg$ID1 = factor(df_obs_agg$ID1, levels = unique_names); 
+# df_obs_agg$ID2 = factor(df_obs_agg$ID2, levels = unique_names); 
+# df_obs_agg$ID1_id = as.integer(df_obs_agg$ID1); 
+# df_obs_agg$ID2_id = as.integer(df_obs_agg$ID2)
+# df_obs_agg$dyad_id = factor(df_obs_agg$dyad_id, levels = df_obs_agg$dyad_id)
 
 setwd("~/Documents/GitHub/Cayo-Maria-Disease-Modeling/Data/R.Data/")
 save(edgelist.all,file="proximity_data.RData")

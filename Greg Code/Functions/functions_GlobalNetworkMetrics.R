@@ -21,27 +21,41 @@
 
 #1. Output the NON-DIRECTIONAL Master Edgelist of all possible pairs given the unique IDs
 calcMasterEL    <- function(unqIDs){ #unq IDs only include focal individuals. I.e. We will only take into account focal individuals in our social networks.
-  ego <- NULL; alter <- NULL #Initialize ego and alter
-  for(i in 1:length(unqIDs)){ #for all unique IDs
-    #Create a list of pairsfor each individual and all other IDs, directionality does not matter
-    ego <- append(ego, rep(unqIDs[i], length(unqIDs) - i)) #append: add to the variable "ego"
-    alter   <- append(alter  , unqIDs[(i+1):length(unqIDs)])
-  }
-  alter <- alter[1:length(ego)]#Make sure ego and alter are the same length
   
-  masterEL <- data.frame(ego, alter) #combine ego and alter
-  masterEL$conc <- paste(masterEL[,1],masterEL[,2],sep=".") #create "pair" or "edge" column 
-  masterEL$count <- 0 #initialize count for each pair
+  # ego <- NULL; alter <- NULL #Initialize ego and alter
+  # 
+  # for(i in 1:length(unqIDs)){ #for all unique IDs
+  #   #Create a list of pairsfor each individual and all other IDs, directionality does not matter
+  #   ego <- append(ego, rep(unqIDs[i], length(unqIDs) - i)) #append: add to the variable "ego"
+  #   alter   <- append(alter, unqIDs[(i+1):length(unqIDs)])
+  # }
+  # 
+  # alter <- alter[1:length(ego)]#Make sure ego and alter are the same length
+  # 
+  # masterEL <- data.frame(ego, alter) #combine ego and alter
+  
+  # masterEL$conc <- paste(masterEL[,1], masterEL[,2],sep=".") #create "pair" or "edge" column 
+  # masterEL$count <- 0 #initialize count for each pair
+  
+  masterEL <- expand.grid(ego = unqIDs, alter = unqIDs) %>% 
+    filter(ego != alter) %>% 
+    mutate(conc = paste(ego, alter, sep = "."), 
+           count = 0)
   
   return(masterEL)
+  
 }
 
 #2. Calculate NON-DIRECTIONAL Edgelist (for proximity data)
 calcEdgeList    <- function(rscans, masterEL){
   
   partners = str_split(rscans$in.proximity, c(","), simplify = TRUE) #split proximity partner by ","
-  focalID = as.character(rscans$focalID)
-  a = cbind(focalID,partners) #bind focal ID and partner together
+  
+  # focalID = as.character(rscans$focalID)
+  
+  focalID = as.character(rscans$focal.monkey)
+  
+  a = cbind(focalID, partners) #bind focal ID and partner together
   
   PP <- NULL  
   for(ii in 1:nrow(a)){ #for all observations
@@ -88,7 +102,7 @@ calcMasterEL_groom    <- function(unqIDs){ #unq IDs only include focal individua
   receivingID <- receivingID[1:length(givingID)]
   
   masterEL <- data.frame(givingID,receivingID)
-  masterEL$conc <- paste(masterEL[,1],masterEL[,2],sep=".")
+  masterEL$conc <- paste(masterEL[,1], masterEL[,2], sep=".")
   masterEL$count <- 0
   
   return(masterEL)
@@ -296,7 +310,7 @@ calcSexProps <- function(netList){
   eo.cross  <- weight.cross/exp.cross
   
   sexPairStats <- data.frame(weight.FF, weight.MM, weight.cross, eo.FF, eo.MM, eo.cross)
-
+  
   return(sexPairStats)        
 }
 
