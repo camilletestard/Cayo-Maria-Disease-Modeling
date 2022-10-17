@@ -30,7 +30,7 @@ ggplot(data = data.all, aes(x=timestep, y = mean, color = year)) +
   #geom_ribbon(aes(y = smooth.mean, ymin = smooth.mean - smooth.sd, ymax = smooth.mean + smooth.sd, fill = year), alpha = .2) +
   xlab("Time step")+ylab("% population infected")+
   theme_light(base_size = 12)+
-  xlim(c(0,1000))+ ylim(c(0,1))
+  xlim(c(0,100))+ ylim(c(0,1))
 
 #Plot SD
 ggplot(data = data.all, aes(x=timestep, y = mean, color = year)) + 

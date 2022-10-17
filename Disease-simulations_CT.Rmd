@@ -74,7 +74,7 @@ Young et al. 2022 The Lancet DOI:https://doi.org/10.1016/S1473-3099(20)30911-7
 list_df=V.data.list
 reps=10#number of times the simulation should be repeated
 #at each simulation time step, two individuals will interact according to their probability of proximity (edge weight). In each time step, all possible dyads are considered.
-sims=10000#number of time steps/times each dyad should be allowed to potentially interact/scans
+sims=1000#number of time steps/times each dyad should be allowed to potentially interact/scans
 simu_res = list()#storing object for simulation results
 props_res=data.frame(matrix(NA, nrow = sims, ncol = reps))
 props_res_list= list()
