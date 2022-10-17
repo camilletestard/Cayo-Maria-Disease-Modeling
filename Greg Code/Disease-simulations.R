@@ -184,7 +184,9 @@ for (r in 1:reps){
   
   {
     
-    while(s < sims & sum(Network[which(Indivs$Infected == 1),][which(Network[which(Indivs$Infected == 1),]>0)]) > 0){
+    # while(s < sims & sum(Network[which(Indivs$Infected == 1),][which(Network[which(Indivs$Infected == 1),]>0)]) > 0){
+    
+    while(s < sims & sum(Network[which(Indivs$Infected == 1), -which(Indivs$Infected == 1)]) > 0){
       
       #create new vector where infected individuals ID are stored after each iteraction over the matrix
       
