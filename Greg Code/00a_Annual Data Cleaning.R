@@ -36,35 +36,38 @@ dir_create("Greg Data/R.Data")
 
 InputRoot <- "Data/Data All Cleaned/BehavioralDataFiles/"
 
+EdgeListList <- list()
+
 for (gy in 1:length(groupyears)){ #for all group & years
   
   print(paste("%%%%%%%%%%%%%%%%%% ",groupyears[gy], "%%%%%%%%%%%%%%%%%%"))
   
-  if (years[gy]==2018) {
-    
-    #Load data
+  if (years[gy] == 2018) {
     
     scans2018 <- read.csv(paste(InputRoot, 
                                 "Group",groupyears[gy],"_scansamples_FULL_CLEANED.txt", sep = ""))
     
-    meta_data <- read.csv(paste("Group",groupyears[gy],"_GroupByYear.txt", sep = "")) #load meta data
+    meta_data <- read.csv(paste(InputRoot, 
+                                "Group",groupyears[gy],"_GroupByYear.txt", sep = "")) #load meta data
     
     #Initialize SocialCaiptalData
-    SocialCapitalData= meta_data[,c("id","sex","age","ordinal.rank","percofsex.dominanted","hrs.focalfollowed","focalcutoff_met")]
-    SocialCapitalData$group = group[gy]
-    SocialCapitalData$year = years[gy]
+    
+    SocialCapitalData <- 
+      meta_data[,c("id","sex","age","ordinal.rank","percofsex.dominanted","hrs.focalfollowed","focalcutoff_met")] %>% 
+      mutate(group = group[gy],
+             year = years[gy])
     
     ##Format data##
-    scans2018$date <- lubridate::mdy(as.character(scans2018$date))
-    scans2018$year <- lubridate::year(scans2018$date)
-    scans2018$Q    <- lubridate::quarter(scans2018$date)
-    scans2018$date <- as.character(scans2018$date) #re-format to character after finding year and quarter
     
-    #Add unique scan identifier
-    scans2018$observation.name = as.factor(paste(scans2018$date, scans2018$scan.num,sep="."))
-    
-    #Add hurricane info
-    scans2018$isPost = 1
+    scans2018 %<>% 
+      mutate(date = lubridate::mdy(as.character(date))) %>% 
+      mutate(year = lubridate::year(date),
+             Q = lubridate::quarter(date),
+             date = as.character(date)) %>%  #re-format to character after finding year and quarter
+      mutate(#Add unique scan identifier
+        observation.name = as.factor(paste(date, scan.num,sep="."))) %>% 
+      mutate(#Add hurricane info
+        isPost = 1)
     
     #Format time and create timeBlock column
     #IMPORTANT: MAKE SURE TIME COLUMNS ARE FORMATTED IN EXCEL IN FORMAT "13:55:00"
@@ -118,7 +121,9 @@ for (gy in 1:length(groupyears)){ #for all group & years
     #Order columns
     col_order <- c("date","observation.name","focalID","group","year","scan.number","focal.activity","focal.activity.isPost","partner.ID","in.proximity","num.prox","isProx","isSocial","isSocialGive", "isSocialGet","isAgg", "Q","isPost","timeBlock")
     scans2018 <- scans2018[, col_order]
-    prox_data =  scans2018[,c("focalID","in.proximity")]
+    prox_data =  scans2018#[,c("focalID","in.proximity")]
+    
+    prox_data %<>% rename(focal.monkey = focalID) %>% mutate(time = NA)
     
   }else{ #if not 2018 (i.e. regular focal data)
     ############################################################################ 
@@ -153,10 +158,13 @@ for (gy in 1:length(groupyears)){ #for all group & years
     
     if (groupyears[gy] == "KK2017"){
       
-      #Add HH dominance for juveniles. 
-      kk.dominance <- read.csv("KK_dominance_withSubadults.csv");names(kk.dominance)[1]="id"
+      kk.dominance <- # Add HH dominance for juveniles
+        read.csv(paste0("Data/Data All Cleaned/Dominance/", "KK_dominance_withSubadults.csv")) %>% 
+        rename(id = 1)
       
-      meta_data[,c("ordinal.rank","percofsex.dominanted")]=kk.dominance[match(meta_data$id, kk.dominance$id),c("ordinal.rank","percofsex.domianted")]
+      meta_data[,c("ordinal.rank","percofsex.dominanted")] = 
+        kk.dominance[match(meta_data$id, kk.dominance$id),
+                     c("ordinal.rank","percofsex.domianted")]
       
     }
     
@@ -188,9 +196,12 @@ for (gy in 1:length(groupyears)){ #for all group & years
   # 
   # prox_data
   
+  library(purrr)
+  
   EdgeList <- 
     prox_data %>% 
     dplyr::select(focal.monkey, in.proximity, DateTime = time) %>% 
+    mutate(Year = str_split(DateTime, "-") %>% map_chr(first)) %>% 
     mutate_at("in.proximity", ~str_split(.x %>% str_remove(" "), ",")) %>% 
     unnest(in.proximity)
   
@@ -199,66 +210,9 @@ for (gy in 1:length(groupyears)){ #for all group & years
     count(focal.monkey, in.proximity) %>% 
     arrange(focal.monkey, in.proximity)
   
-  # #Get observation effort for each dyad
-  # if (years[gy]==2018){
-  #   
-  #   numscans = as.data.frame(table(prox_data$focalID))
-  #   
-  # }else{ 
-  #   
-  #   numscans = as.data.frame(table(prox_data$focal.monkey))
-  #   
-  # }
-  
-  # df_obs_agg$ID1_obseff_duration = meta_data$hrs.focalfollowed[match(df_obs_agg$ID1, meta_data$id)]
-  # df_obs_agg$ID1_obseff_samples = numscans$Freq[match(df_obs_agg$ID1, numscans$Var1)]
-  # df_obs_agg$ID2_obseff_duration = meta_data$hrs.focalfollowed[match(df_obs_agg$ID2, meta_data$id)] 
-  # df_obs_agg$ID2_obseff_samples = numscans$Freq[match(df_obs_agg$ID2, numscans$Var1)]
-  # df_obs_agg$total_obs_time = df_obs_agg$ID1_obseff_duration  + df_obs_agg$ID2_obseff_duration 
-  # df_obs_agg$total_samples = df_obs_agg$ID1_obseff_samples + df_obs_agg$ID2_obseff_samples
-  # 
-  # ## Add id qualifiers
-  # #sex
-  # df_obs_agg$ID1_sex = meta_data$sex[match(df_obs_agg$ID1, meta_data$id)]
-  # df_obs_agg$ID2_sex = meta_data$sex[match(df_obs_agg$ID2, meta_data$id)]
-  # #rank
-  # df_obs_agg$ID1_rank = meta_data$ordinal.rank[match(df_obs_agg$ID1, meta_data$id)]
-  # df_obs_agg$ID2_rank = meta_data$ordinal.rank[match(df_obs_agg$ID2, meta_data$id)]
-  # #age
-  # df_obs_agg$ID1_age = meta_data$age[match(df_obs_agg$ID1, meta_data$id)]
-  # df_obs_agg$ID2_age = meta_data$age[match(df_obs_agg$ID2, meta_data$id)]
-  # #group, year, Hurricane status
-  # df_obs_agg$group = group[gy]; df_obs_agg$year = years[gy]; 
-  # if(years[gy]>2017){df_obs_agg$isPost = "post"}else{df_obs_agg$isPost = "pre"}
-  # 
-  # head(df_obs_agg)
-  
-  
-  ###################################################################
-  
-  # Merge and save data
-  
-  edgelist.all = rbind(edgelist.all, df_obs_agg)
-  
-  
+  EdgeListList[[gy]] <- EdgeList
   
 }
 
-# #Check V2019 data is normal
-# df = edgelist.all[edgelist.all$group=="V" & edgelist.all$year=="2015",]
-# length(which(df$count!=0))/nrow(df)
 
-#extract the number of unique IDs
-unique_names <- unique(c(df_obs_agg$ID1, df_obs_agg$ID2))
-nr_ind <- length(unique_names)
-nr_dyads <- nr_ind*(nr_ind-1)/2 # -1 to remove self-interactions e.g. AA & /2 because undirected so AB = BA
-
-# df_obs_agg$ID1 = factor(df_obs_agg$ID1, levels = unique_names); 
-# df_obs_agg$ID2 = factor(df_obs_agg$ID2, levels = unique_names); 
-# df_obs_agg$ID1_id = as.integer(df_obs_agg$ID1); 
-# df_obs_agg$ID2_id = as.integer(df_obs_agg$ID2)
-# df_obs_agg$dyad_id = factor(df_obs_agg$dyad_id, levels = df_obs_agg$dyad_id)
-
-setwd("~/Documents/GitHub/Cayo-Maria-Disease-Modeling/Data/R.Data/")
-save(edgelist.all,file="proximity_data.RData")
 
