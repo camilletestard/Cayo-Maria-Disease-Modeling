@@ -214,5 +214,9 @@ for (gy in 1:length(groupyears)){ #for all group & years
   
 }
 
+names(EdgeListList) <- groupyears
 
+EdgeListList %<>% bind_rows(.id = "Rep")
+
+EdgeListList %>% saveRDS("Greg Data/MetaEdges.rds")
 

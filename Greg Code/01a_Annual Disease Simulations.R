@@ -30,7 +30,9 @@ library(stringr)
 #read data
 # load("~/Library/Mobile Documents/com~apple~CloudDocs/Cayo-Maria-Disease-Modeling/Data/R.Data/proximity_data.RData")
 
-load("Data/R.Data/proximity_data.RData")
+MetaEdges <- readRDS("Greg Data/MetaEdges.rds")
+
+
 
 #create weight variable. Proportion of scans observed in proximity
 
