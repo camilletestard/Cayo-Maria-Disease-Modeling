@@ -30,16 +30,9 @@ library(stringr)
 #read data
 # load("~/Library/Mobile Documents/com~apple~CloudDocs/Cayo-Maria-Disease-Modeling/Data/R.Data/proximity_data.RData")
 
-MetaEdges <- readRDS("Greg Data/MetaEdges.rds")
+AggregatedEdges <- readRDS("Greg Data/MetaEdges.rds")
 
-MetaEdges %<>% # Cleaning the columns and names
-  mutate_at("in.proximity", ~str_remove_all(.x, " ")) %>% 
-  rename(From = focal.monkey, To = in.proximity)
-
-AggregatedEdges <- # Getting the total observations for each dyad:rep
-  MetaEdges %>% 
-  group_by(From, To, Rep) %>% 
-  summarise(Count = n())
+AggregatedEdges %<>% rename(From = focal.monkey, To = in.proximity)
 
 Observations <-  # Getting the total observations for each ID:Rep
   AggregatedEdges %>% 
@@ -59,221 +52,128 @@ AggregatedEdges$Weight %>% qplot
 AggregatedEdges %<>% 
   mutate_at("Rep", str_trim) %>% 
   mutate(Group = substr(Rep, 1, 1), 
-                            Year = substr(Rep, str_count(Rep) - 3, str_count(Rep)))
+         Year = substr(Rep, str_count(Rep) - 3, str_count(Rep)))
 
 AggregatedEdges %<>% mutate(Post = Year >= 2018)
 
-#create weight variable. Proportion of scans observed in proximity
+AggregatedEdges %<>% filter(From != To)
 
-edgelist.all$weight <- edgelist.all$count/edgelist.all$total_samples
+Reps <- AggregatedEdges$Rep %>% unique %>% sort
 
-table(edgelist.all$group, edgelist.all$year)#S group is only observed one year and both KK and F are only observed one year after the huricane.
+dir_create("Greg Data/Outputs")
 
-#separate data by group and year
-V.data <- subset(edgelist.all, group=="V")
-F.data <- subset(edgelist.all, group=="F")
-KK.data <- subset(edgelist.all, group=="KK")
-
-
-## ---------------------------------------------------------------------------------------------------------------------------
-
-#number of individuals observed per year
-
-# V.data %>%
-#   group_by(year) %>%
-#   summarise(N = length(unique(unlist(ID1, ID2))))
-
-library(ggregplot)
-
-V.data %>% group_by(year) %>% 
-  summarise(N = nunique(ID1))
-
-# V.data <- subset(V.data, select = c("ID1", "ID2", "weight", "year"))
-
-library(magrittr)
-
-V.data %<>% dplyr::select(c("ID1", "ID2", "weight", "year"))
-
-#create different data frames for each year and combine into one list V.data.list
-
-yearsV <- unique(V.data$year)
-
-# V.data.list.raw <- list()
-# 
-# for (i in 1:length(yearsV)){
-#   
-#    V.data.list.raw[[i]]<-subset(V.data, year==yearsV[i])
-#    
-# }
-
-library(purrr)
-
-V.data.list.raw <- yearsV %>% 
-  map(~V.data %>% filter(year == .x) %>% 
-        dplyr::select(-year) %>% 
-        mutate_at("weight", ~ifelse(.x == 0 , #.x + 0.0001, 
-                                    .x,
-                                    .x)))
-
-names(V.data.list.raw) <- yearsV
-
-# V.data.list.raw <- lapply(V.data.list.raw, function(x) x[!(names(x) %in% c("year"))])
-
-
-## ---------------------------------------------------------------------------------------------------------------------------
-
-V.data.list <- V.data.list.raw
-
-# for (i in 1:length(V.data.list)){
-#   
-#   V.data.list[[i]]$weight <- replace(V.data.list[[i]]$weight, V.data.list[[i]]$weight == 0, 0.0001)
-#   
-# }
-
-# mins <- rep(NA, 6)
-# 
-# for (i in 1:length(V.data.list)){
-# 
-#     mins[i] <- min(V.data.list[[i]]$weight, na.rm = T)
-#     
-# }
-# 
-
-mins <- V.data.list %>% map(~min(.x$weight))
-
-list_names = yearsV
-
-mins
-
-## ---------------------------------------------------------------------------------------------------------------------------
-
-list_df = V.data.list
-
-reps = 1000 #number of times the simulation should be repeated
-
-#at each simulation time step, two individuals will interact according to their probability of proxomity (edge weight). In each time step, all possible dyads are considered.
-
-sims = 10000 #number of time steps/times each dyad should be allowed to potentially interact/scans
-simu_res = list()#storing object for simulation results
-
-props_res = data.frame(matrix(NA, nrow = sims, ncol = reps))
-
-props_res_list = list()
-
-pinfs = c(0.01, 0.1, 0.2)
-
-d = 1
-# pinf = 0.01
-pinf = 0.2
-
-r <- 1
-
-# simu_res_pinf <- foreach(d = 1:length(list_df)) %:% foreach(pinf = pinfs) %dopar% {
-#for each year...
-df <- list_df[[d]]
-#create adjancecy matrix
-mygraph <- graph.data.frame(df, directed = F)
-my_mat <- get.adjacency(mygraph, sparse = FALSE, attr='weight')
-
-# Removing zeroes ####
-
-Zeroes <- as.numeric(colSums(my_mat) == 0)
-
-# Zeroes <- which(colSums(my_mat) == 0)
-# my_mat <- my_mat[-Zeroes, -Zeroes]
-
-#calculate group size
-N = length(colnames(my_mat))
-
-#next line optional but ensures lower tri is NAs
-# my_mat[lower.tri(my_mat)] <- NA
-#empty vectors for simulation results
-value100 <- rep(NA, reps)
-value90 <- rep(NA, reps)
-value50 <- rep(NA, reps)
-value60 <- rep(NA, reps)
-value70 <- rep(NA, reps)
-value80 <- rep(NA, reps)
-maxprop <- rep(NA, reps)
-props <- rep(NA, sims)
-
-IndivList <- list()
-
-for (r in 1:reps){
+for(FocalRep in Reps){
   
-  t1 = Sys.time()
+  ## ---------------------------------------------------------------------------------------------------------------------------
   
-  print(r)
+  V.data <- AggregatedEdges %>% filter(Rep == FocalRep)
   
-  #create vector to store the health status of each individual at each simulation step (sim)
+  library(magrittr)
   
-  health = rep(0, N)
+  V.data %<>% dplyr::select(c("From", "To", "Weight", "Year"))
   
-  #infect a random individual, change its status to infected in health vector
+  #create different data frames for each year and combine into one list V.data.list
   
-  health[floor(runif(1, min = 1, max = N + 1))] = 1
+  yearsV <- V.data$Year %>% unique
   
-  Indivs <- data.frame(ID = colnames(my_mat), 
-                       Infected = health,
-                       Unconnected = Zeroes,
-                       Time = health - 1)
+  library(purrr)
   
-  if(!Indivs[health, "Unconnected"]){
+  V.data.list <- yearsV %>% 
+    map(~V.data %>% filter(Year == .x) %>% 
+          dplyr::select(-Year))
+  
+  names(V.data.list) <- yearsV
+  
+  ## ---------------------------------------------------------------------------------------------------------------------------
+  
+  (Mins <- V.data.list %>% map(~min(.x$Weight)))
+  
+  (Maxes <- V.data.list %>% map(~max(.x$Weight)))
+  
+  list_names = yearsV
+  
+  mins
+  
+  ## ---------------------------------------------------------------------------------------------------------------------------
+  
+  list_df = V.data.list
+  
+  reps = 1000 #number of times the simulation should be repeated
+  
+  #at each simulation time step, two individuals will interact according to their probability of proxomity (edge weight). In each time step, all possible dyads are considered.
+  
+  sims = 10000 #number of time steps/times each dyad should be allowed to potentially interact/scans
+  simu_res = list()#storing object for simulation results
+  
+  props_res = data.frame(matrix(NA, nrow = sims, ncol = reps))
+  
+  props_res_list = list()
+  
+  pinfs = c(0.01, 0.1, 0.2)
+  
+  d = 1
+  # pinf = 0.01
+  pinf = 0.2
+  
+  r <- 1
+  
+  df <- list_df[[d]]
+  
+  mygraph <- graph.data.frame(df, directed = F)
+  
+  my_mat <- get.adjacency(mygraph, sparse = FALSE, attr = 'Weight')*3
+  
+  Zeroes <- as.numeric(colSums(my_mat) == 0)
+  
+  N = length(colnames(my_mat))
+  
+  IndivList <- list()
+  
+  r <- 1
+  
+  for (r in 1:reps){
     
-    Network <- my_mat
+    t1 = Sys.time()
     
-    NPairs <- Network[which(health == 1),]>0
+    print(r)
     
-    s <- 1
+    #create vector to store the health status of each individual at each simulation step (sim)
     
-    {
+    health = rep(0, N)
+    
+    #infect a random individual, change its status to infected in health vector
+    
+    # health[floor(runif(1, min = 1, max = N + 1))] = 1
+    
+    health[sample(1:length(health), 1)] = 1
+    
+    Indivs <- data.frame(ID = colnames(my_mat), 
+                         Infected = health,
+                         Unconnected = Zeroes,
+                         Time = health - 1)
+    
+    if(!Indivs[which(Indivs$Infected == 1), "Unconnected"]){
+      
+      Network <- my_mat
+      
+      NPairs <- Network[which(health == 1),]>0
+      
+      s <- 1
       
       while(s < sims & sum(Network[which(Indivs$Infected == 1), -which(Indivs$Infected == 1)]) > 0){
-        
-        # for(s in 1:sims){
-        
-        #create new vector where infected individuals ID are stored after each iteraction over the matrix
-        
-        # health_update = c()
-        
-        #iterate over upper triangle matrix
-        
-        # for(i in 1:(N-1)){
-        #   
-        #   for(j in (i+1):N){
-        #     
-        #     #if one of the two individuals considered is infected..
-        #     
-        #     if(sum(health[i], health[j]) == 1){
-        #       
-        #       #evaluate whether they interact according to edge weight
-        #       if(runif(n = 1) < my_mat[i,j]){
-        #         
-        #         #if they interact, evaluate whether it gets infected. If it does...
-        #         if(runif(n = 1) < pinf){
-        #           
-        #           #update its status to infected in the updates' vector
-        #           health_update <- append(health_update, c(i,j))
-        #           
-        #         }
-        #       }
-        #     }
-        #   }
-        # }
         
         TransmissionMatrix <- array(0, dim = dim(Network))
         
         I2 <- which(Indivs$Infected > 0) # Identifying infected
-        NI2 <- setdiff(1:nrow(Indivs), which(Indivs$Infected > 0)) # Identifying uninfected
+        
+        NI2 <- setdiff(1:nrow(Indivs), 
+                       which(Indivs$Infected > 0)) # Identifying uninfected
         
         NPairs <- which(Network[I2,]>0)
         
-        # TransmissionMatrix[I2,][NPairs] <- rbinom(length(NPairs), 1, S_I)
-        # TransmissionMatrix[I2,][NPairs] <- runif(length(NPairs), 0, 1) < Network[I2,][NPairs]
-        
         TransmissionMatrix[I2,][NPairs] <- 
-          rbinom(length(NPairs), 1, Network[I2,][NPairs])*
-          as.numeric(runif(length(NPairs), 0, 1) < pinf)
+          rbinom(length(NPairs), 1, Network[I2,][NPairs])* # Identifying if they interact
+          as.numeric(runif(length(NPairs), 0, 1) < pinf) # Identifying if they infect
         
         Infected <- which(colSums(TransmissionMatrix) > 0)# %>% as.numeric()
         
@@ -304,37 +204,22 @@ for (r in 1:reps){
       
       Indivs
       
+      # }
+      
+    }else{
+      
+      print("Unconnected!")
+      
     }
+    
+    IndivList[[r]] <- Indivs
+    
+    print(Sys.time() - t1)
     
   }
   
-  IndivList[[r]] <- Indivs
+  saveRDS(IndivList, file = paste0("Greg Data/Outputs/", FocalRep, ".rds"))
   
-  print(Sys.time() - t1)
-  
-  # #write down at which simulation step different thresholds of proportions of individuals infected were reached for each repetition of the simulation (reps)
-  # value100[r] <- which(props == 1)[1]
-  # value90[r] <- which(props >= 0.9)[1]
-  # value80[r] <- which(props >= 0.8)[1]
-  # value70[r] <- which(props >= 0.7)[1]
-  # value60[r] <- which(props >= 0.6)[1]
-  # value50[r] <- which(props >= 0.5)[1]
-  # maxprop[r] <- max(props)
-  # 
-  # #store proportion of infected individuals at each simulation step for each repetition of the simulation (reps) 
-  # props_res[, r]<-props
-  
-}
-
-#store simulation steps at which thresholds were reached in each repetition of the simulation into list
-simu_res[[d]]<- list(data.frame("time_to_100"=value100,
-                                "time_to_90"=value90, 
-                                "time_to_50"=value50, 
-                                "time_to_80"=value80, 
-                                "time_to_70"=value70, 
-                                "time_to_60"=value60,
-                                "max_infected"=maxprop), props_res) 
-
 }
 
 #name data frames in list with year names

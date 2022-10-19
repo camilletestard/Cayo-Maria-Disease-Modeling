@@ -24,7 +24,7 @@ groupyears = c("F2015","V2015","KK2015",
                "KK2017","V2017","V2018","KK2018",
                "S2019","V2019","F2021","V2021")
 
-gy <- 12 # 16
+gy <- 1 # 2 # 16
 
 edgelist.all = data.frame()
 
@@ -198,17 +198,26 @@ for (gy in 1:length(groupyears)){ #for all group & years
   
   library(purrr)
   
-  EdgeList <- 
+  BlankEdgeList <- 
+    expand.grid(focal.monkey = meta_data$id, in.proximity = meta_data$id)
+  
+  Edges <- 
     prox_data %>% 
     dplyr::select(focal.monkey, in.proximity, DateTime = time) %>% 
     mutate(Year = str_split(DateTime, "-") %>% map_chr(first)) %>% 
-    mutate_at("in.proximity", ~str_split(.x %>% str_remove(" "), ",")) %>% 
+    mutate_at("in.proximity", ~str_split(.x %>% str_remove_all(" "), ",")) %>% 
     unnest(in.proximity)
   
-  AggregatedEdgeList <- 
-    EdgeList %>% 
-    count(focal.monkey, in.proximity) %>% 
+  AggregatedEdgeList <-
+    Edges %>%
+    count(focal.monkey, in.proximity) %>%
     arrange(focal.monkey, in.proximity)
+  
+  EdgeList <- 
+    BlankEdgeList %>% 
+    left_join(AggregatedEdgeList, by = c("focal.monkey", "in.proximity")) %>% 
+    rename(Count = n) %>% 
+    mutate_at("Count", ~replace_na(.x, 0))
   
   EdgeListList[[gy]] <- EdgeList
   

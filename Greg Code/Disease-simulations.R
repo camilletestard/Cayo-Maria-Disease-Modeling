@@ -1,6 +1,8 @@
 
 # knitr::purl("Greg Code/Disease-simulations.Rmd")
 
+rm(list = ls())
+
 ## ---- warning=FALSE, message=F----------------------------------------------------------------------------------------------
 
 library(dplyr)
@@ -139,6 +141,14 @@ df <- list_df[[d]]
 #create adjancecy matrix
 mygraph <- graph.data.frame(df, directed = F)
 my_mat <- get.adjacency(mygraph, sparse = FALSE, attr='weight')
+
+# Removing zeroes ####
+
+Zeroes <- as.numeric(colSums(my_mat) == 0)
+
+# Zeroes <- which(colSums(my_mat) == 0)
+# my_mat <- my_mat[-Zeroes, -Zeroes]
+
 #calculate group size
 N = length(colnames(my_mat))
 
@@ -171,94 +181,97 @@ for (r in 1:reps){
   health[floor(runif(1, min = 1, max = N + 1))] = 1
   
   Indivs <- data.frame(ID = colnames(my_mat), 
-                       Infected = health, 
+                       Infected = health,
+                       Unconnected = Zeroes,
                        Time = health - 1)
   
-  Network <- my_mat
-  
-  NPairs <- Network[which(health == 1),]>0
-  
-  s <- 1
-  
-  # for(s in 1:sims){
-  
-  {
+  if(!Indivs[health, "Unconnected"]){
     
-    # while(s < sims & sum(Network[which(Indivs$Infected == 1),][which(Network[which(Indivs$Infected == 1),]>0)]) > 0){
+    Network <- my_mat
     
-    while(s < sims & sum(Network[which(Indivs$Infected == 1), -which(Indivs$Infected == 1)]) > 0){
+    NPairs <- Network[which(health == 1),]>0
+    
+    s <- 1
+    
+    {
       
-      #create new vector where infected individuals ID are stored after each iteraction over the matrix
-      
-      # health_update = c()
-      
-      #iterate over upper triangle matrix
-      
-      # for(i in 1:(N-1)){
-      #   
-      #   for(j in (i+1):N){
-      #     
-      #     #if one of the two individuals considered is infected..
-      #     
-      #     if(sum(health[i], health[j]) == 1){
-      #       
-      #       #evaluate whether they interact according to edge weight
-      #       if(runif(n = 1) < my_mat[i,j]){
-      #         
-      #         #if they interact, evaluate whether it gets infected. If it does...
-      #         if(runif(n = 1) < pinf){
-      #           
-      #           #update its status to infected in the updates' vector
-      #           health_update <- append(health_update, c(i,j))
-      #           
-      #         }
-      #       }
-      #     }
-      #   }
-      # }
-      
-      TransmissionMatrix <- array(0, dim = dim(Network))
-      
-      I2 <- which(Indivs$Infected > 0) # Identifying infected
-      NI2 <- setdiff(1:nrow(Indivs), which(Indivs$Infected > 0)) # Identifying uninfected
-      
-      NPairs <- which(Network[I2,]>0)
-      
-      # TransmissionMatrix[I2,][NPairs] <- rbinom(length(NPairs), 1, S_I)
-      # TransmissionMatrix[I2,][NPairs] <- runif(length(NPairs), 0, 1) < Network[I2,][NPairs]
-      
-      TransmissionMatrix[I2,][NPairs] <- 
-        rbinom(length(NPairs), 1, Network[I2,][NPairs])*
-        as.numeric(runif(length(NPairs), 0, 1) < pinf)
-      
-      Infected <- which(colSums(TransmissionMatrix) > 0)# %>% as.numeric()
-      
-      NewlyInfected <- setdiff(Infected, 
-                               which(Indivs$Infected == 1))
-      
-      if(length(NewlyInfected) > 0){
+      while(s < sims & sum(Network[which(Indivs$Infected == 1), -which(Indivs$Infected == 1)]) > 0){
         
-        Indivs[NewlyInfected, "Time"] <- s
-        Indivs[NewlyInfected, "Infected"] <- 1
+        # for(s in 1:sims){
+        
+        #create new vector where infected individuals ID are stored after each iteraction over the matrix
+        
+        # health_update = c()
+        
+        #iterate over upper triangle matrix
+        
+        # for(i in 1:(N-1)){
+        #   
+        #   for(j in (i+1):N){
+        #     
+        #     #if one of the two individuals considered is infected..
+        #     
+        #     if(sum(health[i], health[j]) == 1){
+        #       
+        #       #evaluate whether they interact according to edge weight
+        #       if(runif(n = 1) < my_mat[i,j]){
+        #         
+        #         #if they interact, evaluate whether it gets infected. If it does...
+        #         if(runif(n = 1) < pinf){
+        #           
+        #           #update its status to infected in the updates' vector
+        #           health_update <- append(health_update, c(i,j))
+        #           
+        #         }
+        #       }
+        #     }
+        #   }
+        # }
+        
+        TransmissionMatrix <- array(0, dim = dim(Network))
+        
+        I2 <- which(Indivs$Infected > 0) # Identifying infected
+        NI2 <- setdiff(1:nrow(Indivs), which(Indivs$Infected > 0)) # Identifying uninfected
+        
+        NPairs <- which(Network[I2,]>0)
+        
+        # TransmissionMatrix[I2,][NPairs] <- rbinom(length(NPairs), 1, S_I)
+        # TransmissionMatrix[I2,][NPairs] <- runif(length(NPairs), 0, 1) < Network[I2,][NPairs]
+        
+        TransmissionMatrix[I2,][NPairs] <- 
+          rbinom(length(NPairs), 1, Network[I2,][NPairs])*
+          as.numeric(runif(length(NPairs), 0, 1) < pinf)
+        
+        Infected <- which(colSums(TransmissionMatrix) > 0)# %>% as.numeric()
+        
+        NewlyInfected <- setdiff(Infected, 
+                                 which(Indivs$Infected == 1))
+        
+        if(length(NewlyInfected) > 0){
+          
+          Indivs[NewlyInfected, "Time"] <- s
+          Indivs[NewlyInfected, "Infected"] <- 1
+          
+        }
+        
+        # #change the status of the newly infected individuals in the health status vector
+        # 
+        # health_unique <- unique(health_update)
+        # 
+        # for (h in health_unique){
+        #   health[h] = 1
+        # }
+        # 
+        # #calculate proportion of infected individuals in each simulation step (sims)
+        # props[s]<- sum(health)/length(health)  
+        
+        s <- s + 1
         
       }
       
-      # #change the status of the newly infected individuals in the health status vector
-      # 
-      # health_unique <- unique(health_update)
-      # 
-      # for (h in health_unique){
-      #   health[h] = 1
-      # }
-      # 
-      # #calculate proportion of infected individuals in each simulation step (sims)
-      # props[s]<- sum(health)/length(health)  
-      
-      s <- s + 1
+      Indivs
       
     }
-    
-    Indivs
     
   }
   
