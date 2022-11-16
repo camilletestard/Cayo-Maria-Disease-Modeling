@@ -13,32 +13,16 @@ library(magrittr); library(fs)
 
 load("Data/R.Data/BisonFittedNetworks.RData")
 
-density_samples[[1]] %>% str
-
 AggregatedEdges <- posterior.el %>% bind_rows(.id = "Rep")
 
 AggregatedEdges %<>% rename(From = 2, To = 3)
-
-# Observations <- AggregatedEdges %>% filter(From == To) %>% rename(Obs = Count)
-# 
-# AggregatedEdges %<>% # Joining the edge list with the total observations
-#   left_join(Observations %>% dplyr::select(-To), by = c("From", "Rep")) %>% 
-#   left_join(Observations %>% dplyr::select(-From), by = c("To", "Rep"), suffix = c(".From", ".To"))
-# 
-# AggregatedEdges %<>% mutate(Weight = Count/(Obs.From + Obs.To - Count))
-
-# AggregatedEdges$Weight %>% qplot
 
 AggregatedEdges %<>% 
   mutate_at("Rep", str_trim) %>% 
   mutate(Group = substr(Rep, 1, 1), 
          Year = substr(Rep, str_count(Rep) - 3, str_count(Rep)))
 
-# AggregatedEdges %<>% filter(!Year == 2018)
-
-# AggregatedEdges %<>% mutate(Post = Year >= 2018)
-
-# AggregatedEdges %<>% filter(From != To)s
+# AggregatedEdges %<>% mutate_at(vars(contains("draw")), ~ifelse(.x < 0.0001, 0, .x))
 
 Reps <- AggregatedEdges$Rep %>% unique %>% sort
 
@@ -56,29 +40,25 @@ pinf = 0.2
 
 FocalRep <- Reps[1]
 
+Reps <- Reps[-1]
+
 for(FocalRep in Reps){
   
   ## ---------------------------------------------------------------------------------------------------------------------------
   
   V.data <- AggregatedEdges %>% filter(Rep == FocalRep)
   
-  #create different data frames for each year and combine into one list V.data.list
-  
-  yearsV <- V.data$Year %>% unique
-  
   r <- 1
   
   IndivList <- list()
   
-  for (r in 1:reps){
+  for (r in r:reps){
     
     t1 = Sys.time()
     
     print(r)
     
     df <- V.data[,c("From", "To", paste0("draw.", r))] %>% rename(Weight = 3)
-    
-    # df$Weight[df$Weight<0.0001] <- 0
     
     mygraph <- graph.data.frame(df, directed = F)
     
@@ -98,11 +78,11 @@ for(FocalRep in Reps){
     
     Network <- AdjMatrix
     
-    NPairs <- Network[which(Health == 1),]>0
+    # NPairs <- Network[which(Health == 1),]>0
     
     s <- 1
     
-    while(s < sims){
+    while(s < sims & sum(Indivs$Infected) < nrow(Indivs)){
       
       TransmissionMatrix <- array(0, dim = dim(Network))
       
@@ -112,8 +92,6 @@ for(FocalRep in Reps){
                      which(Indivs$Infected > 0)) # Identifying uninfected
       
       if(0){
-        
-        # NPairs <- which(Network[I2,]>0)
         
         TransmissionMatrix[I2,] <- 
           
@@ -128,7 +106,7 @@ for(FocalRep in Reps){
         
       }
       
-      if(0){
+      if(1){
         
         NPairs <- which(Network[I2,]>0)
         
