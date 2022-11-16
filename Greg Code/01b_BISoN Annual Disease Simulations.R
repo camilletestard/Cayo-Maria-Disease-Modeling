@@ -1,12 +1,7 @@
 
-
 # 01_Disease Simulations.R
 
-# knitr::purl("Greg Code/Disease-simulations.Rmd")
-
 rm(list = ls())
-
-## ---- warning=FALSE, message=F----------------------------------------------------------------------------------------------
 
 library(dplyr)
 library(igraph)
@@ -16,34 +11,38 @@ library(stringr)
 
 library(magrittr); library(fs)
 
-AggregatedEdges <- readRDS("Greg Data/MetaEdges.rds")
+load("Data/R.Data/BisonFittedNetworks.RData")
 
-AggregatedEdges %<>% rename(From = focal.monkey, To = in.proximity)
+density_samples[[1]] %>% str
 
-Observations <- AggregatedEdges %>% filter(From == To) %>% rename(Obs = Count)
+AggregatedEdges <- posterior.el %>% bind_rows(.id = "Rep")
 
-AggregatedEdges %<>% # Joining the edge list with the total observations
-  left_join(Observations %>% dplyr::select(-To), by = c("From", "Rep")) %>% 
-  left_join(Observations %>% dplyr::select(-From), by = c("To", "Rep"), suffix = c(".From", ".To"))
+AggregatedEdges %<>% rename(From = 2, To = 3)
 
-AggregatedEdges %<>% mutate(Weight = Count/(Obs.From + Obs.To - Count))
+# Observations <- AggregatedEdges %>% filter(From == To) %>% rename(Obs = Count)
+# 
+# AggregatedEdges %<>% # Joining the edge list with the total observations
+#   left_join(Observations %>% dplyr::select(-To), by = c("From", "Rep")) %>% 
+#   left_join(Observations %>% dplyr::select(-From), by = c("To", "Rep"), suffix = c(".From", ".To"))
+# 
+# AggregatedEdges %<>% mutate(Weight = Count/(Obs.From + Obs.To - Count))
 
-AggregatedEdges$Weight %>% qplot
+# AggregatedEdges$Weight %>% qplot
 
 AggregatedEdges %<>% 
   mutate_at("Rep", str_trim) %>% 
   mutate(Group = substr(Rep, 1, 1), 
          Year = substr(Rep, str_count(Rep) - 3, str_count(Rep)))
 
-AggregatedEdges %<>% filter(!Year == 2018)
+# AggregatedEdges %<>% filter(!Year == 2018)
 
-AggregatedEdges %<>% mutate(Post = Year >= 2018)
+# AggregatedEdges %<>% mutate(Post = Year >= 2018)
 
-AggregatedEdges %<>% filter(From != To)
+# AggregatedEdges %<>% filter(From != To)s
 
 Reps <- AggregatedEdges$Rep %>% unique %>% sort
 
-dir_create("Greg Data/Outputs")
+dir_create("Greg Data/Outputs/BISoN")
 
 FocalRep <- Reps[1]
 
@@ -57,7 +56,7 @@ for(FocalRep in Reps){
   
   library(magrittr)
   
-  V.data %<>% dplyr::select(c("From", "To", "Weight", "Year"))
+  # V.data %<>% dplyr::select(c("From", "To", "Weight", "Year"))
   
   #create different data frames for each year and combine into one list V.data.list
   
@@ -73,11 +72,11 @@ for(FocalRep in Reps){
   
   ## ---------------------------------------------------------------------------------------------------------------------------
   
-  (Mins <- V.data.list %>% map(~min(.x$Weight)))
-  
-  (Maxes <- V.data.list %>% map(~max(.x$Weight)))
-  
-  list_names = yearsV
+  # (Mins <- V.data.list %>% map(~min(.x$Weight)))
+  # 
+  # (Maxes <- V.data.list %>% map(~max(.x$Weight)))
+  # 
+  # list_names = yearsV
   
   ## ---------------------------------------------------------------------------------------------------------------------------
   
@@ -102,25 +101,23 @@ for(FocalRep in Reps){
   
   r <- 1
   
-  df <- list_df[[d]]
-  
-  mygraph <- graph.data.frame(df, directed = F)
-  
-  my_mat <- get.adjacency(mygraph, sparse = FALSE, attr = 'Weight')*3
-  
-  Zeroes <- as.numeric(colSums(my_mat) == 0)
-  
-  N = length(colnames(my_mat))
-  
   IndivList <- list()
-  
-  r <- 1
   
   for (r in 1:reps){
     
     t1 = Sys.time()
     
     print(r)
+    
+    df <- V.data[,c("From", "To", paste0("draw.", r))] %>% rename(Weight = 3)
+    
+    mygraph <- graph.data.frame(df, directed = F)
+    
+    my_mat <- get.adjacency(mygraph, sparse = FALSE, attr = 'Weight')
+    
+    Zeroes <- as.numeric(colSums(my_mat) == 0)
+    
+    N = length(colnames(my_mat))
     
     #create vector to store the health status of each individual at each simulation step (sim)
     
@@ -203,7 +200,7 @@ for(FocalRep in Reps){
     
   }
   
-  saveRDS(IndivList, file = paste0("Greg Data/Outputs/", FocalRep, ".rds"))
+  saveRDS(IndivList, file = paste0("Greg Data/Outputs/BISoN/", FocalRep, ".rds"))
   
 }
 
