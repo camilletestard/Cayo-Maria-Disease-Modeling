@@ -11,7 +11,7 @@ library(tidyr)
 library(stringr)
 library(ggplot2)
 
-library(magrittr)
+library(magrittr); library(ggregplot)
 
 #Load functions
 
@@ -125,6 +125,9 @@ for (gy in 1:length(groupyears)){ #for all group & years
     
     prox_data %<>% rename(focal.monkey = focalID) %>% mutate(time = NA)
     
+    # prox_data$in.proximity[prox_idx] <- paste(prox_data$focal.monkey[prox_idx], 
+    #                                           prox_data$in.proximity[prox_idx], sep = ",")
+    
   }else{ #if not 2018 (i.e. regular focal data)
     ############################################################################ 
     
@@ -196,6 +199,8 @@ for (gy in 1:length(groupyears)){ #for all group & years
   # 
   # prox_data
   
+  prox_data
+  
   library(purrr)
   
   BlankEdgeList <- 
@@ -218,6 +223,8 @@ for (gy in 1:length(groupyears)){ #for all group & years
     left_join(AggregatedEdgeList, by = c("focal.monkey", "in.proximity")) %>% 
     rename(Count = n) %>% 
     mutate_at("Count", ~replace_na(.x, 0))
+  
+  Observations <- Edges %>% group_by(focal.monkey) %>% summarise(Count = nunique(DateTime))
   
   EdgeListList[[gy]] <- EdgeList
   

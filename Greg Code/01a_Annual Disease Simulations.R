@@ -34,16 +34,18 @@ AggregatedEdges <- readRDS("Greg Data/MetaEdges.rds")
 
 AggregatedEdges %<>% rename(From = focal.monkey, To = in.proximity)
 
-Observations <-  # Getting the total observations for each ID:Rep
-  AggregatedEdges %>% 
-  pivot_longer(c("To", "From")) %>% 
-  group_by(value, Rep) %>% 
-  summarise_at("Count", ~sum(.x)) %>% 
-  rename(Obs = Count)
+# Observations <-  # Getting the total observations for each ID:Rep
+#   AggregatedEdges %>% 
+#   pivot_longer(c("To", "From")) %>% 
+#   group_by(value, Rep) %>% 
+#   summarise_at("Count", ~sum(.x)) %>% 
+#   rename(Obs = Count)
+
+Observations <- AggregatedEdges %>% filter(From == To) %>% rename(Obs = Count)
 
 AggregatedEdges %<>% # Joining the edge list with the total observations
-  left_join(Observations, by = c("From" = "value", "Rep")) %>% 
-  left_join(Observations, by = c("To" = "value", "Rep"), suffix = c(".From", ".To"))
+  left_join(Observations %>% dplyr::select(-To), by = c("From", "Rep")) %>% 
+  left_join(Observations %>% dplyr::select(-From), by = c("To", "Rep"), suffix = c(".From", ".To"))
 
 AggregatedEdges %<>% mutate(Weight = Count/(Obs.From + Obs.To - Count))
 
@@ -54,6 +56,8 @@ AggregatedEdges %<>%
   mutate(Group = substr(Rep, 1, 1), 
          Year = substr(Rep, str_count(Rep) - 3, str_count(Rep)))
 
+AggregatedEdges %<>% filter(!Year == 2018)
+
 AggregatedEdges %<>% mutate(Post = Year >= 2018)
 
 AggregatedEdges %<>% filter(From != To)
@@ -61,6 +65,10 @@ AggregatedEdges %<>% filter(From != To)
 Reps <- AggregatedEdges$Rep %>% unique %>% sort
 
 dir_create("Greg Data/Outputs")
+
+FocalRep <- Reps[1]
+
+# Reps <- Reps[!str_detect(Reps, 2018)]
 
 for(FocalRep in Reps){
   
