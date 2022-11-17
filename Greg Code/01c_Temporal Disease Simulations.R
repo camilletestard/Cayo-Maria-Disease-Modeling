@@ -8,6 +8,7 @@ library(doParallel)
 library(stringr)
 
 library(magrittr); library(fs)
+
 EdgeListList <- readRDS("Greg Data/TimeEdges.rds")
 
 EdgeListList %<>% 
@@ -41,3 +42,9 @@ GraphList <-
       get.adjacency(sparse = F)
     
   })
+
+
+
+
+
+
