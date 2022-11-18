@@ -3,11 +3,7 @@
 
 rm(list = ls())
 
-library(dplyr)
-library(igraph)
-library(foreach)
-library(doParallel)
-library(stringr)
+library(dplyr); library(igraph); library(foreach); library(doParallel); library(stringr); library(tidyverse)
 
 library(magrittr); library(fs)
 
@@ -22,25 +18,18 @@ AggregatedEdges %<>%
   mutate(Group = substr(Rep, 1, 1), 
          Year = substr(Rep, str_count(Rep) - 3, str_count(Rep)))
 
-# AggregatedEdges %<>% mutate_at(vars(contains("draw")), ~ifelse(.x < 0.0001, 0, .x))
-
 Reps <- AggregatedEdges$Rep %>% unique %>% sort
 
 dir_create("Greg Data/Outputs/BISoN")
 
-reps = 1000 #number of times the simulation should be repeated
+reps = 1000 # number of times the simulation should be repeated
 
-#at each simulation time step, two individuals will interact according to their probability of proxomity (edge weight). In each time step, all possible dyads are considered.
+sims = 10000 # number of time steps/times each dyad should be allowed to potentially interact/scans
 
-sims = 10000 #number of time steps/times each dyad should be allowed to potentially interact/scans
-
-pinfs = c(0.01, 0.1, 0.2)
-
-pinf = 0.2
+MeanInf <- 0.15
+InfSD <- 0.04
 
 FocalRep <- Reps[1]
-
-Reps <- Reps[-1]
 
 for(FocalRep in Reps){
   
@@ -74,11 +63,11 @@ for(FocalRep in Reps){
                          Infected = Health,
                          Time = Health - 1)
     
-    # if(!Indivs[which(Indivs$Infected == 1), "Unconnected"]){
-    
     Network <- AdjMatrix
     
-    # NPairs <- Network[which(Health == 1),]>0
+    P_I <- rnorm(1, MeanInf, InfSD)
+    
+    if(P_I < 0) P_I <- 0.001
     
     s <- 1
     
@@ -91,13 +80,13 @@ for(FocalRep in Reps){
       NI2 <- setdiff(1:nrow(Indivs), 
                      which(Indivs$Infected > 0)) # Identifying uninfected
       
-      if(0){
+      if(1){
         
         TransmissionMatrix[I2,] <- 
           
           rbinom(length(Network[I2,]), 1, Network[I2,])* # Identifying if they interact
           
-          as.numeric(runif(length(Network[I2,]), 0, 1) < pinf) # Identifying if they infect
+          as.numeric(runif(length(Network[I2,]), 0, 1) < P_I) # Identifying if they infect
         
         Infected <- which(colSums(TransmissionMatrix) > 0)# %>% as.numeric()
         
@@ -106,7 +95,7 @@ for(FocalRep in Reps){
         
       }
       
-      if(1){
+      if(0){
         
         NPairs <- which(Network[I2,]>0)
         
@@ -114,7 +103,7 @@ for(FocalRep in Reps){
           
           rbinom(length(NPairs), 1, Network[I2,][NPairs])* # Identifying if they interact
           
-          as.numeric(runif(length(NPairs), 0, 1) < pinf) # Identifying if they infect
+          as.numeric(runif(length(NPairs), 0, 1) < P_I) # Identifying if they infect
         
         Infected <- which(colSums(TransmissionMatrix) > 0)# %>% as.numeric()
         
@@ -138,11 +127,13 @@ for(FocalRep in Reps){
     
     IndivList[[r]] <- Indivs
     
+    saveRDS(IndivList, file = paste0("Greg Data/Outputs/BISoN/Random/PI_", P_I, "_",  FocalRep, ".rds"))
+    
     print(Sys.time() - t1)
     
   }
   
-  saveRDS(IndivList, file = paste0("Greg Data/Outputs/BISoN/", FocalRep, ".rds"))
+  # saveRDS(IndivList, file = paste0("Greg Data/Outputs/BISoN/PI_", pinf, "_",  FocalRep, ".rds"))
   
 }
 
