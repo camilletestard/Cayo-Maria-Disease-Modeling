@@ -4,7 +4,6 @@
 rm(list = ls())
 
 library(dplyr); library(igraph); library(foreach); library(doParallel); library(stringr); library(tidyverse)
-
 library(magrittr); library(fs)
 
 load("Data/R.Data/BisonFittedNetworks.RData")
@@ -20,11 +19,13 @@ AggregatedEdges %<>%
 
 Reps <- AggregatedEdges$Rep %>% unique %>% sort
 
-dir_create("Greg Data/Outputs/BISoN")
+dir_create("Greg Data/Outputs/BISoN/Random")
 
 reps = 1000 # number of times the simulation should be repeated
 
 sims = 10000 # number of time steps/times each dyad should be allowed to potentially interact/scans
+
+sims %<>% subtract("Greg Data/Outputs/BISoN/Random" %>% list.files %>% length)
 
 MeanInf <- 0.15
 InfSD <- 0.04
@@ -33,9 +34,7 @@ FocalRep <- Reps[1]
 
 for(FocalRep in Reps){
   
-  ## ---------------------------------------------------------------------------------------------------------------------------
-  
-  V.data <- AggregatedEdges %>% filter(Rep == FocalRep)
+  RepData <- AggregatedEdges %>% filter(Rep == FocalRep)
   
   r <- 1
   
@@ -47,11 +46,17 @@ for(FocalRep in Reps){
     
     print(r)
     
-    df <- V.data[,c("From", "To", paste0("draw.", r))] %>% rename(Weight = 3)
+    # mygraph <- 
+    #   RepData[,c("From", "To", paste0("draw.", r))] %>% 
+    #   rename(Weight = 3) %>% 
+    #   graph.data.frame(directed = F)
     
-    mygraph <- graph.data.frame(df, directed = F)
-    
-    AdjMatrix <- get.adjacency(mygraph, sparse = FALSE, attr = 'Weight')
+    AdjMatrix <- 
+      
+      RepData[,c("From", "To", paste0("draw.", sample(1:1000, 1)))] %>% 
+      rename(Weight = 3) %>% 
+      graph.data.frame(directed = F) %>% 
+      get.adjacency(sparse = FALSE, attr = 'Weight')
     
     N = length(colnames(AdjMatrix))
     
@@ -65,9 +70,9 @@ for(FocalRep in Reps){
     
     Network <- AdjMatrix
     
-    P_I <- rnorm(1, MeanInf, InfSD)
+    P_I <- rnorm(1, MeanInf, InfSD) %>% round(6)
     
-    if(P_I < 0) P_I <- 0.001
+    if(P_I < 0) P_I <- 0.000001
     
     s <- 1
     

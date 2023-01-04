@@ -2,7 +2,7 @@
 # 02c_Temporal Summarising ####
 
 library(tidyverse); library(ggregplot); library(ggforce); library(cowplot); 
-library(patchwork)
+library(patchwork); library(fs); library(magrittr)
 
 theme_set(theme_cowplot() + theme(strip.background = element_rect(fill = "white")))
 
@@ -52,7 +52,8 @@ LongMaxes %>%
   geom_boxplot() +
   geom_sina(alpha = 0.1) +
   facet_grid(PI~Population) + 
-  ggtitle("Max") +
+  ggtitle("Max") + 
+  labs(x = "Year", y = "Maximum time step infected") +
   scale_colour_manual(values = c(AlberColours[[1]], AlberColours[[2]])) +
   
   LongMaxes %>% 
@@ -61,11 +62,12 @@ LongMaxes %>%
   geom_sina(alpha = 0.1) +
   facet_grid(PI~Population) + 
   ggtitle("Mean") +
+  labs(x = "Year", y = "Mean time step infected") +
   scale_colour_manual(values = c(AlberColours[[1]], AlberColours[[2]])) +
   
   plot_layout(guides = "collect")
 
-ggsave("Figures/Pre_Post_Temporal.jpeg", units = "mm", width = 250, height = 150)
+ggsave("Figures/Pre_Post_Temporal.jpeg", units = "mm", width = 350, height = 150)
 
 
 # Running an LM ####

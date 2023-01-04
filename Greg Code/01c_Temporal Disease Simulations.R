@@ -7,7 +7,7 @@ library(foreach)
 library(doParallel)
 library(stringr)
 
-library(magrittr); library(fs)
+library(tidyverse); library(magrittr); library(fs)
 
 EdgeListList <- readRDS("Greg Data/TimeEdges.rds")
 
@@ -16,6 +16,10 @@ EdgeListList %<>%
 
 EdgeListList %<>% mutate_at("Date", ~lubridate::ymd(.x))
 
+EdgeListList %<>% 
+  filter(!(str_detect(Rep, "K2018") & Date == "2017-01-18"))
+
+pinf = 1
 pinf = 0.5
 
 Window <- 30
@@ -27,7 +31,7 @@ FocalRep <- Reps[1]
 
 dir_create("Greg Data/Outputs/Temporal")
 
-for(FocalRep in Reps[-1]){
+for(FocalRep in Reps[str_detect(Reps, "2018")]){
   
   SubEdgeList <- EdgeListList %>% filter(Rep == FocalRep)
   
@@ -148,6 +152,6 @@ for(FocalRep in Reps[-1]){
     
   }
   
-  saveRDS(IndivList, file = paste0("Greg Data/Outputs/Temporal/PI_", pinf, "_",  FocalRep, ".rds"))
+  saveRDS(IndivList, file = paste("Greg Data/Outputs/Temporal/PI", pinf, "Window", Window,  FocalRep, ".rds", sep = "_"))
   
 }

@@ -13,33 +13,11 @@ library(foreach)
 library(doParallel)
 library(stringr)
 
-# n.cores<-parallel::detectCores()
-# 
-# #set up local cluster
-# 
-# my.cluster <- parallel::makeCluster(
-#   n.cores, 
-#   type = "FORK"
-#   )
-# 
-# doParallel::registerDoParallel(cl = my.cluster)
-
-
-
-## ---------------------------------------------------------------------------------------------------------------------------
-#read data
-# load("~/Library/Mobile Documents/com~apple~CloudDocs/Cayo-Maria-Disease-Modeling/Data/R.Data/proximity_data.RData")
+library(magrittr); library(fs)
 
 AggregatedEdges <- readRDS("Greg Data/MetaEdges.rds")
 
 AggregatedEdges %<>% rename(From = focal.monkey, To = in.proximity)
-
-# Observations <-  # Getting the total observations for each ID:Rep
-#   AggregatedEdges %>% 
-#   pivot_longer(c("To", "From")) %>% 
-#   group_by(value, Rep) %>% 
-#   summarise_at("Count", ~sum(.x)) %>% 
-#   rename(Obs = Count)
 
 Observations <- AggregatedEdges %>% filter(From == To) %>% rename(Obs = Count)
 
@@ -99,8 +77,6 @@ for(FocalRep in Reps){
   (Maxes <- V.data.list %>% map(~max(.x$Weight)))
   
   list_names = yearsV
-  
-  mins
   
   ## ---------------------------------------------------------------------------------------------------------------------------
   

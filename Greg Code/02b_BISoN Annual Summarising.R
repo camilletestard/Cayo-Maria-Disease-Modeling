@@ -1,17 +1,20 @@
 
 # 02a_BISoN Annual Summarising ####
 
-library(tidyverse); library(ggregplot); library(ggforce); library(cowplot)
+library(tidyverse); library(ggregplot); library(ggforce); library(cowplot); library(fs)
+library(magrittr)
 
 theme_set(theme_cowplot())
 
 IndivListList <- 
-  "Greg Data/Outputs/BISoN" %>% 
-  dir_ls() %>% 
+  "Greg Data/Outputs/BISoN/Random" %>% 
+  dir_ls() %>% extract2(1) %>% 
   map(readRDS)
 
 names(IndivListList) <- "Greg Data/Outputs/BISoN" %>% 
-  list.files %>% str_remove(".rds$") %>% str_remove("PI_")
+  list.files %>% 
+  setdiff("Random") %>% 
+  str_remove(".rds$") %>% str_remove("PI_")
 
 Maxes <- 
   
@@ -53,7 +56,9 @@ LongMaxes %>%
   geom_boxplot() +
   geom_sina(alpha = 0.1) +
   facet_grid(PI~Population) + 
-  ggtitle("Max") +
+  # ggtitle("Max") +
+  labs(x = "Year", y = "Maximum time step infected") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   scale_colour_manual(values = c(AlberColours[[1]], AlberColours[[2]])) +
 
 LongMaxes %>% 
@@ -61,12 +66,14 @@ LongMaxes %>%
   geom_boxplot() +
   geom_sina(alpha = 0.1) +
   facet_grid(PI~Population) + 
-  ggtitle("Mean") +
+  # ggtitle("Mean") +
+  labs(x = "Year", y = "Mean time step infected") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   scale_colour_manual(values = c(AlberColours[[1]], AlberColours[[2]])) +
   
   plot_layout(guides = "collect")
 
-ggsave("Figures/Pre_Post_BISoN.jpeg", units = "mm", width = 250, height = 150)
+ggsave("Figures/Pre_Post_BISoN.jpeg", units = "mm", width = 350, height = 150)
 
 
 # Running an LM ####

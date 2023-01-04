@@ -84,8 +84,15 @@ for (gy in 1:length(groupyears)){ #for all group & years
     scans2018$prox.adult.IDs=sub("'","",as.character(scans2018$prox.adult.IDs))
     
     #Clean up: rename and delete unused columns
-    scans2018[,c("stop.time","observer.initials","cayo.map.code","nearest.adult.neighbour.ID","distance.nearest.neighbour","start.time")]=NULL
-    names(scans2018)[3]="scan.number"; names(scans2018)[4]="focalID"; names(scans2018)[5]="focal.activity"; names(scans2018)[7]="in.proximity"
+    # scans2018[,c("stop.time","observer.initials","cayo.map.code","nearest.adult.neighbour.ID","distance.nearest.neighbour","start.time")]=NULL
+    # names(scans2018)[3]="scan.number"; names(scans2018)[4]="focalID"; names(scans2018)[5]="focal.activity"; names(scans2018)[7]="in.proximity"
+    
+    scans2018 %<>% 
+      rename(scan.number = scan.num, 
+             focalID = subject.ID, 
+             focal.activity = subject.activity, 
+             in.proximity = prox.adult.IDs
+             )
     
     #create column with equivalent activity to pre-hurricane
     scans2018[] = lapply(scans2018,str_trim)
@@ -117,11 +124,14 @@ for (gy in 1:length(groupyears)){ #for all group & years
     scans2018$isAgg=0; scans2018$isAgg[which(scans2018$focal.activity=="aggression" | scans2018$focal.activity=="submit")]=1
     
     #Order columns
-    col_order <- c("date","observation.name","focalID","group","year","scan.number","focal.activity","focal.activity.isPost","partner.ID","in.proximity","num.prox","isProx","isSocial","isSocialGive", "isSocialGet","isAgg", "Q","isPost","timeBlock")
-    scans2018 <- scans2018[, col_order]
+    # col_order <- c("date","observation.name","focalID","group","year","scan.number","focal.activity","focal.activity.isPost","partner.ID","in.proximity","num.prox","isProx","isSocial","isSocialGive", "isSocialGet","isAgg", "Q","isPost","timeBlock")
+    # scans2018 <- scans2018[, col_order]
     prox_data =  scans2018#[,c("focalID","in.proximity")]
     
-    prox_data %<>% rename(focal.monkey = focalID) %>% mutate(time = NA)
+    prox_data %<>% rename(focal.monkey = focalID) 
+    
+    prox_data %<>% 
+      mutate(time = lubridate::ymd_hms(paste(date, start.time)))
     
     # prox_data$in.proximity[prox_idx] <- paste(prox_data$focal.monkey[prox_idx], 
     #                                           prox_data$in.proximity[prox_idx], sep = ",")
@@ -207,10 +217,10 @@ for (gy in 1:length(groupyears)){ #for all group & years
   Edges <- 
     prox_data %>% 
     dplyr::select(From = focal.monkey, To = in.proximity, DateTime = time) %>% 
-    mutate(Year = str_split(DateTime, "-") %>% map_chr(first)) %>% 
+    # mutate(Year = str_split(DateTime, "-") %>% map_chr(first)) %>% 
     mutate_at("To", ~str_split(.x %>% str_remove_all(" "), ",")) %>% 
     unnest(To) %>% 
-    filter(From != To) %>% 
+    # filter(From != To) %>% 
     arrange(DateTime)
   
   EdgeListList[[gy]] <- Edges
@@ -221,5 +231,9 @@ names(EdgeListList) <- groupyears
 
 EdgeListList %<>% bind_rows(.id = "Rep")
 
-EdgeListList %>% saveRDS("Greg Data/MetaEdges.rds")
+EdgeListList %>% saveRDS("Greg Data/TimeEdges.rds")
+
+
+
+
 
