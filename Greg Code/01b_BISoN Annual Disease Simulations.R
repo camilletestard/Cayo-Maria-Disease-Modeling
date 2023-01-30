@@ -145,7 +145,11 @@ for(FocalRep in Reps){
       
       # IndivList[[r]] <- Indivs
       
-      saveRDS(Indivs, file = paste0("Greg Data/Outputs/BISoN/Random/",FocalRep, "_", r, "_", P_I, ".rds"))
+      saveRDS(Indivs, file = paste0("Greg Data/Outputs/BISoN/Random/",FocalRep, "_", 
+                                    
+                                    str_pad(r, width = 4, side = "left", pad = "0"), 
+                                    
+                                    "_", P_I, ".rds"))
       
       print(Sys.time() - t1)
       

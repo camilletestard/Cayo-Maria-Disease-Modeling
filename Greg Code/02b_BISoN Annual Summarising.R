@@ -7,10 +7,10 @@ library(magrittr)
 theme_set(theme_cowplot())
 
 FileList <- 
-  "Greg Data/Outputs/BISoN/Random" %>% 
+  "Greg Data/Outputs/BISoN/Random_Old" %>% 
   dir_ls()
 
-names(FileList) <- "Greg Data/Outputs/BISoN/Random" %>%
+names(FileList) <- "Greg Data/Outputs/BISoN/Random_Old" %>%
   list.files
 
 OutputList <- 
@@ -21,17 +21,17 @@ OutputList <-
     
     print(which(FileList == a))
     
-    b <- a %>% readRDS
+    b <- (a %>% readRDS)[[a %>% str_split("_") %>% map(3) %>% unlist %>% as.numeric]]
     
-    Maxes <- map(b, ~max(.x$Time)) %>% unlist
-    
-    Means <- map(b, ~mean(.x$Time)) %>% unlist
+    # Maxes <- map(b, ~max(.x$Time)) %>% unlist
+    # 
+    # Means <- map(b, ~mean(.x$Time)) %>% unlist
     
     # TotalInf <- map(b, ~Prev(.x$Infected)) %>% unlist
     
-    data.frame(Means, Maxes, 
-               # TotalInf,
-               File = rep(a %>% str_split("/") %>% map_chr(last))) %>% return
+    data.frame(Mean = mean(b$Time), 
+               Max = max(b$Time), 
+               File = a %>% str_split("/") %>% map_chr(last)) %>% return
     
   })
 
@@ -42,7 +42,8 @@ OutputDF %<>%
   separate(File, sep = "_", into = c("Rep", "R", "P_I")) %>% 
   mutate_at("P_I", as.numeric)
 
-OutputDF %<>% mutate_at("Rep", ~str_remove(.x, "Greg Data/Outputs/BISoN/Random/"))
+OutputDF %<>% 
+  mutate_at("R", as.numeric)
 
 # Testing ####
 
@@ -55,34 +56,51 @@ TestDF %<>%
 
 TestDF %<>% mutate(PostMaria = as.factor(as.numeric(Year %in% c(2018:2021))))
 
-TestDF %<>% mutate_at(c("Means", "Maxes"), ~log(.x + 1))
+TestDF %<>% mutate_at(c("Mean", "Max"), ~log(.x + 1))
 
-TestDF %>% RandomSlice(10000) %>% pull(P_I) %>% qplot
+TestDF %<>% filter(Mean > 0)
 
-TestDF %>% RandomSlice(10000) %>% SinaGraph("Rep", "Means")
+TestDF %>% pull(Max) %>% qplot
 
-TestDF %>% RandomSlice(10000) %>% ggplot(aes(P_I, log10(Means))) + 
-  # geom_point() + 
+TestDF %>% pull(Mean) %>% qplot
+
+TestDF %>% SinaGraph("Rep", "Mean")
+
+TestDF %>% SinaGraph("Rep", "Max")
+
+TestDF %>% 
+  ggplot(aes(P_I, Mean)) + 
+  geom_point() +
   facet_wrap(~Rep) + 
   geom_smooth(method = lm)
 
-LM1 <- lm(Means ~ P_I + PostMaria, data = TestDF)
+TestDF %>% 
+  ggplot(aes(P_I, exp(Mean), colour = Rep)) + 
+  geom_point(alpha = 0.2) +
+  # facet_wrap(~Rep) + 
+  geom_smooth(fill = NA) +
+  scale_y_log10(limits = c(1, NA)) +
+  labs(y = "Mean Timestep")
+
+LM1 <- lm(Mean ~ P_I + PostMaria, data = TestDF)
 
 LM1 %>% summary
 
-library(lme4); library(lmerTest)
+LMM1 <- lmer(Mean ~ P_I + PostMaria + (1|Rep), data = TestDF)
 
-LMM1 <- lmer(Means ~ P_I + PostMaria + (1|Rep), data = TestDF)
+LMM1 %>% summary %>% extract2("coefficients") %>% data.frame()
 
-LMM1 %>% summary
+LM1b <- lm(Mean ~ P_I + PostMaria + Year, data = TestDF)
 
-LM2 <- lm(Maxes ~ P_I + PostMaria + Rep, data = TestDF)
+LM1b %>% summary %>% extract2("coefficients") %>% data.frame()
 
-LM2 %>% summary
-
-LMM2 <- lmer(Maxes ~ P_I + PostMaria + (1|Rep), data = TestDF)
-
-LMM2 %>% summary
+# LM2 <- lm(Max ~ P_I + PostMaria + Rep, data = TestDF)
+# 
+# LM2 %>% summary
+# 
+# LMM2 <- lmer(Max ~ P_I + PostMaria + (1|Rep), data = TestDF)
+# 
+# LMM2 %>% summary
 
 
 library(MCMCglmm)
@@ -107,12 +125,38 @@ TimestepList <-
     
     print(which(FileList == a))
     
-    b <- a %>% readRDS
+    # b <- a %>% readRDS
     
-    b %>% map("Infected") %>% map(sum)
+    b <- (a %>% readRDS)[[a %>% str_split("_") %>% map(3) %>% unlist %>% as.numeric]]
+    
+    b
     
   })
 
+TimeStepDF <- 
+  TimestepList %>% 
+  map(~.x %>% arrange(Time) %>% mutate(NInf = 1:n()) %>% mutate(PropInf = NInf/max(NInf))) %>% 
+  bind_rows(.id = "File")
+
+TimeStepDF %<>% 
+  mutate_at("File", ~str_remove(.x, ".rds")) %>% 
+  separate(File, sep = "_", into = c("Rep", "R", "P_I")) %>% 
+  mutate_at(c("P_I", "R"), as.numeric) %>%
+  mutate(File = paste(Rep, R, P_I, sep = "_"))
+
+TimeStepDF %<>% 
+  mutate_at("Rep", ~str_replace(.x, "KK", "K")) %>% 
+  mutate(Population = substr(Rep, 1, 1), 
+         Year = substr(Rep, 2, 5)) %>%   
+  mutate(PostMaria = as.factor(as.numeric(Year %in% c(2018:2021))))
+
+TimeStepDF %>%
+  mutate(File = paste(Rep, R, P_I, sep = "_")) %>% 
+  ggplot(aes(Time + 1, PropInf)) + 
+  geom_line(aes(group = File, colour = PostMaria), alpha = 0.05) + 
+  scale_x_log10()
+
+ggsave("TimeFigure.jpeg")
 
 ######
 
