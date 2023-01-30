@@ -52,74 +52,39 @@ TestDF %<>% mutate(PostMaria = as.factor(as.numeric(Year %in% c(2018:2021))))
 
 TestDF %<>% mutate_at(c("Mean", "Max"), ~log(.x + 1))
 
-TestDF %<>% filter(Mean > 0)
-
-TestDF %>% pull(Max) %>% qplot
-
-TestDF %>% pull(Mean) %>% qplot
-
-TestDF %>% SinaGraph("Rep", "Mean")
-
-TestDF %>% SinaGraph("Rep", "Max")
-
 TestDF %>% 
   ggplot(aes(P_I, Mean)) + 
   geom_point() +
   facet_wrap(~Rep) + 
-  geom_smooth(method = lm)
+  geom_smooth()
 
 TestDF %>% 
   ggplot(aes(P_I, exp(Mean), colour = Rep)) + 
   geom_point(alpha = 0.2) +
   # facet_wrap(~Rep) + 
-  geom_smooth(fill = NA) +
-  scale_y_log10(limits = c(1, NA)) +
+  geom_smooth(method = lm, fill = NA) +
+  scale_y_log10(limits = c(10, NA)) +
   labs(y = "Mean Timestep")
 
 LM1 <- lm(Mean ~ P_I + PostMaria, data = TestDF)
 
 LM1 %>% summary
 
+library(lme4); library(lmerTest)
+
 LMM1 <- lmer(Mean ~ P_I + PostMaria + (1|Rep), data = TestDF)
 
 LMM1 %>% summary %>% extract2("coefficients") %>% data.frame()
-
-LM1b <- lm(Mean ~ P_I + PostMaria + Year, data = TestDF)
-
-LM1b %>% summary %>% extract2("coefficients") %>% data.frame()
-
-# LM2 <- lm(Max ~ P_I + PostMaria + Rep, data = TestDF)
-# 
-# LM2 %>% summary
-# 
-# LMM2 <- lmer(Max ~ P_I + PostMaria + (1|Rep), data = TestDF)
-# 
-# LMM2 %>% summary
-
-
-library(MCMCglmm)
-
-library(INLA)
-
-LM1 <- inla(Means ~ P_I + PostMaria + Population*Year, data = TestDF)
-
-LM1 %>% summary
-
-LM2 <- MCMCglmm(Maxes ~ P_I + PostMaria + Population*Year, data = TestDF)
-
-LM2 %>% summary
 
 # Converting to timesteps ####
 
 TimestepList <- 
   
-  FileList %>% 
-  
-  map(readRDS)
+  FileList %>% map(readRDS)
 
 TimeStepDF <- 
   TimestepList %>% 
-  map(~.x %>% arrange(Time) %>% mutate(NInf = 1:n()) %>% mutate(PropInf = NInf/max(NInf))) %>% 
+  map(~.x %>% arrange(Time) %>% filter(Time >= 0) %>% mutate(NInf = 1:n()) %>% mutate(PropInf = NInf/nrow(.x))) %>% 
   bind_rows(.id = "File")
 
 TimeStepDF %<>% 
@@ -134,13 +99,61 @@ TimeStepDF %<>%
          Year = substr(Rep, 2, 5)) %>%   
   mutate(PostMaria = as.factor(as.numeric(Year %in% c(2018:2021))))
 
+# MeanLevels <- 
+#   TimeStepDF %>% 
+#   group_by(Rep, Time, PostMaria) %>% 
+#   summarise_at("PropInf", mean)
+
+TimeStepDF %>%
+  mutate_at("PostMaria", ~factor(.x, levels = c("1", "0"))) %>% 
+  mutate(File = paste(Rep, R, P_I, sep = "_")) %>% 
+  ggplot(aes(Time + 1, PropInf, colour = PostMaria)) + 
+  geom_line(aes(group = File), alpha = 0.05) + 
+  geom_line(data = . %>% filter(Time > 10000), aes(group = File), alpha = 1) + 
+  scale_x_log10() + scale_y_continuous(breaks = c(0:2/2)) +
+  scale_colour_manual(values = c(AlberColours[[1]], AlberColours[[2]]), 
+                      labels = rev(c("Pre-Maria", "Post-Maria"))) +
+  labs(colour = NULL, x = "Time step", y = "Proportion infected") +
+  theme(legend.position = "top") +
+  
+  # geom_smooth(aes(group = Rep), alpha = 0.5, fill = NA) + 
+  facet_grid(Population ~ .) + 
+  theme(strip.background = element_rect(fill = "white", colour = NA)) +
+  NULL
+
+ggsave("TimeFigure.jpeg", units = "mm", 
+       width = 150, height = 150, dpi = 300)
+
+library(colorspace)
+
 TimeStepDF %>%
   mutate(File = paste(Rep, R, P_I, sep = "_")) %>% 
-  ggplot(aes(Time + 1, PropInf)) + 
-  geom_line(aes(group = File, colour = PostMaria), alpha = 0.05) + 
-  scale_x_log10()
+  mutate_at("Year", ~factor(.x, levels = c(2015:2017, "[ Maria ]", 2018, 2019, 2021))) %>% 
+  ggplot(aes(Time + 1, PropInf, colour = Year)) + 
+  geom_line(aes(group = File), alpha = 0.05) + 
+  geom_line(data = . %>% filter(Time > 10000), aes(group = File), alpha = 1) + 
+  scale_x_log10() + scale_y_continuous(breaks = c(0:2/2)) +
+  # scale_colour_discrete_diverging(palette = "Red-Green") +
+  scale_colour_discrete_divergingx(palette = "PuOR", 
+                                   limits = c(2015:2017, "[ Maria ]", 2018, 2019, 2021)) +
+  labs(colour = NULL, x = "Time step", y = "Proportion infected") +
+  theme(legend.position = "top", legend.justification = 0.5) +
+  
+  # geom_smooth(aes(group = Rep), alpha = 0.5, fill = NA) + 
+  facet_grid(Population ~ .) + 
+  theme(strip.background = element_rect(fill = "white", colour = NA)) +
+  guides(colour = guide_legend(reverse = F,
+                               direction = "horizontal",
+                               # title.position = "left",
+                               # title.vjust = 0.25, title.hjust = 1,
+                               label.position = "top",
+                               # label.hjust = 0.5,
+                               # label.vjust = 1.5,
+                               label.theme = element_text(angle = 0), nrow = 1)) +
+  NULL
 
-ggsave("TimeFigure.jpeg")
+ggsave("TimeFigure.jpeg", units = "mm", 
+       width = 150, height = 150, dpi = 300)
 
 ######
 
