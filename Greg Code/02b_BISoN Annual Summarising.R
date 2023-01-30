@@ -6,25 +6,115 @@ library(magrittr)
 
 theme_set(theme_cowplot())
 
-IndivListList <- 
+FileList <- 
   "Greg Data/Outputs/BISoN/Random" %>% 
-  dir_ls() %>% extract2(1) %>% 
-  map(readRDS)
+  dir_ls()
 
-names(IndivListList) <- "Greg Data/Outputs/BISoN" %>% 
-  list.files %>% 
-  setdiff("Random") %>% 
-  str_remove(".rds$") %>% str_remove("PI_")
+names(FileList) <- "Greg Data/Outputs/BISoN/Random" %>%
+  list.files
 
-Maxes <- 
+OutputList <- 
   
-  IndivListList %>% 
+  FileList %>% 
   
   map(function(a){
     
-    map(a, ~max(.x$Time)) %>% unlist
+    print(which(FileList == a))
     
-  }) %>% bind_rows()
+    b <- a %>% readRDS
+    
+    Maxes <- map(b, ~max(.x$Time)) %>% unlist
+    
+    Means <- map(b, ~mean(.x$Time)) %>% unlist
+    
+    # TotalInf <- map(b, ~Prev(.x$Infected)) %>% unlist
+    
+    data.frame(Means, Maxes, 
+               # TotalInf,
+               File = rep(a %>% str_split("/") %>% map_chr(last))) %>% return
+    
+  })
+
+OutputDF <- OutputList %>% bind_rows(.id = "Rep")
+
+OutputDF %<>% 
+  mutate_at("File", ~str_remove(.x, ".rds")) %>% 
+  separate(File, sep = "_", into = c("Rep", "R", "P_I")) %>% 
+  mutate_at("P_I", as.numeric)
+
+OutputDF %<>% mutate_at("Rep", ~str_remove(.x, "Greg Data/Outputs/BISoN/Random/"))
+
+# Testing ####
+
+TestDF <- OutputDF
+
+TestDF %<>% 
+  mutate_at("Rep", ~str_replace(.x, "KK", "K")) %>% 
+  mutate(Population = substr(Rep, 1, 1), 
+         Year = substr(Rep, 2, 5))
+
+TestDF %<>% mutate(PostMaria = as.factor(as.numeric(Year %in% c(2018:2021))))
+
+TestDF %<>% mutate_at(c("Means", "Maxes"), ~log(.x + 1))
+
+TestDF %>% RandomSlice(10000) %>% pull(P_I) %>% qplot
+
+TestDF %>% RandomSlice(10000) %>% SinaGraph("Rep", "Means")
+
+TestDF %>% RandomSlice(10000) %>% ggplot(aes(P_I, log10(Means))) + 
+  # geom_point() + 
+  facet_wrap(~Rep) + 
+  geom_smooth(method = lm)
+
+LM1 <- lm(Means ~ P_I + PostMaria, data = TestDF)
+
+LM1 %>% summary
+
+library(lme4); library(lmerTest)
+
+LMM1 <- lmer(Means ~ P_I + PostMaria + (1|Rep), data = TestDF)
+
+LMM1 %>% summary
+
+LM2 <- lm(Maxes ~ P_I + PostMaria + Rep, data = TestDF)
+
+LM2 %>% summary
+
+LMM2 <- lmer(Maxes ~ P_I + PostMaria + (1|Rep), data = TestDF)
+
+LMM2 %>% summary
+
+
+library(MCMCglmm)
+
+library(INLA)
+
+LM1 <- inla(Means ~ P_I + PostMaria + Population*Year, data = TestDF)
+
+LM1 %>% summary
+
+LM2 <- MCMCglmm(Maxes ~ P_I + PostMaria + Population*Year, data = TestDF)
+
+LM2 %>% summary
+
+# Converting to timesteps ####
+
+TimestepList <- 
+  
+  FileList %>% 
+  
+  map(function(a){
+    
+    print(which(FileList == a))
+    
+    b <- a %>% readRDS
+    
+    b %>% map("Infected") %>% map(sum)
+    
+  })
+
+
+######
 
 Means <- 
   
@@ -60,8 +150,8 @@ LongMaxes %>%
   labs(x = "Year", y = "Maximum time step infected") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   scale_colour_manual(values = c(AlberColours[[1]], AlberColours[[2]])) +
-
-LongMaxes %>% 
+  
+  LongMaxes %>% 
   ggplot(aes(as.factor(Year), Mean, colour = PostMaria)) +
   geom_boxplot() +
   geom_sina(alpha = 0.1) +
@@ -78,6 +168,8 @@ ggsave("Figures/Pre_Post_BISoN.jpeg", units = "mm", width = 350, height = 150)
 
 # Running an LM ####
 
+IndivListList <- FileList[1] %>% map(readRDS)
+
 TestDF <- IndivListList %>% 
   map(~bind_rows(.x, .id = "Sim")) %>% 
   bind_rows(.id = "Rep")
@@ -85,6 +177,7 @@ TestDF <- IndivListList %>%
 TestDF %<>% 
   # separate(Rep, sep = "_", into = c("PI", "Rep"))
   mutate(PI = substr(Rep, 1, 3) %>% as.numeric) %>% 
+  mutate(Rep = str_split(Rep, "_") %>% map_chr(first)) %>% 
   mutate(Rep = str_split(Rep, "_") %>% map_chr(last))
 
 TestDF %<>% 

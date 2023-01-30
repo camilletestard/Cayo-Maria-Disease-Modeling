@@ -23,9 +23,7 @@ dir_create("Greg Data/Outputs/BISoN/Random")
 
 reps = 1000 # number of times the simulation should be repeated
 
-sims = 10000 # number of time steps/times each dyad should be allowed to potentially interact/scans
-
-sims %<>% subtract("Greg Data/Outputs/BISoN/Random" %>% list.files %>% length)
+sims = 10000 # number of time steps/times each dyad should be allowed to potentially interact
 
 MeanInf <- 0.15
 InfSD <- 0.04
@@ -34,111 +32,126 @@ FocalRep <- Reps[1]
 
 for(FocalRep in Reps){
   
+  print(FocalRep)
+  
   RepData <- AggregatedEdges %>% filter(Rep == FocalRep)
   
-  r <- 1
+  r <- 0
   
-  IndivList <- list()
+  # r <- dir_ls("Greg Data/Outputs/BISoN/Random",
+  #             regex = "Greg Data/Outputs/BISoN/Random/" %>%
+  #               paste0(FocalRep)) %>%
+  #   str_split("_") %>% map_chr(2) %>% as.numeric %>% max %>% add(1)
   
-  for (r in r:reps){
+  if(r < 1) r <- 1
+  
+  if(r < 1001){
     
-    t1 = Sys.time()
+    IndivList <- list()
     
-    print(r)
-    
-    # mygraph <- 
-    #   RepData[,c("From", "To", paste0("draw.", r))] %>% 
-    #   rename(Weight = 3) %>% 
-    #   graph.data.frame(directed = F)
-    
-    AdjMatrix <- 
+    for (r in r:reps){
       
-      RepData[,c("From", "To", paste0("draw.", sample(1:1000, 1)))] %>% 
-      rename(Weight = 3) %>% 
-      graph.data.frame(directed = F) %>% 
-      get.adjacency(sparse = FALSE, attr = 'Weight')
-    
-    N = length(colnames(AdjMatrix))
-    
-    Health = rep(0, N)
-    
-    Health[sample(1:length(Health), 1)] = 1
-    
-    Indivs <- data.frame(ID = colnames(AdjMatrix), 
-                         Infected = Health,
-                         Time = Health - 1)
-    
-    Network <- AdjMatrix
-    
-    P_I <- rnorm(1, MeanInf, InfSD) %>% round(6)
-    
-    if(P_I < 0) P_I <- 0.000001
-    
-    s <- 1
-    
-    while(s < sims & sum(Indivs$Infected) < nrow(Indivs)){
+      t1 = Sys.time()
       
-      TransmissionMatrix <- array(0, dim = dim(Network))
+      print(r)
       
-      I2 <- which(Indivs$Infected > 0) # Identifying infected
+      # mygraph <- 
+      #   RepData[,c("From", "To", paste0("draw.", r))] %>% 
+      #   rename(Weight = 3) %>% 
+      #   graph.data.frame(directed = F)
       
-      NI2 <- setdiff(1:nrow(Indivs), 
-                     which(Indivs$Infected > 0)) # Identifying uninfected
-      
-      if(1){
+      AdjMatrix <- 
         
-        TransmissionMatrix[I2,] <- 
+        # RepData[,c("From", "To", paste0("draw.", sample(1:1000, 1)))] %>% 
+        RepData[,c("From", "To", paste0("draw.", r))] %>% 
+        rename(Weight = 3) %>% 
+        graph.data.frame(directed = F) %>% 
+        get.adjacency(sparse = FALSE, attr = 'Weight')
+      
+      N = length(colnames(AdjMatrix))
+      
+      Health = rep(0, N)
+      
+      Health[sample(1:length(Health), 1)] = 1
+      
+      Indivs <- data.frame(ID = colnames(AdjMatrix), 
+                           Infected = Health,
+                           Time = Health - 1)
+      
+      Network <- AdjMatrix
+      
+      P_I <- runif(1, 0, 1) %>% round(6)
+      
+      if(P_I < 0) P_I <- 0.000001
+      if(P_I > 1) P_I <- 0.999999
+      
+      s <- 1
+      
+      while(s < sims & sum(Indivs$Infected) < nrow(Indivs)){
+        
+        TransmissionMatrix <- array(0, dim = dim(Network))
+        
+        I2 <- which(Indivs$Infected > 0) # Identifying infected
+        
+        NI2 <- setdiff(1:nrow(Indivs), 
+                       which(Indivs$Infected > 0)) # Identifying uninfected
+        
+        if(1){
           
-          rbinom(length(Network[I2,]), 1, Network[I2,])* # Identifying if they interact
+          TransmissionMatrix[I2,] <- 
+            
+            rbinom(length(Network[I2,]), 1, Network[I2,])* # Identifying if they interact
+            
+            # as.numeric(runif(length(Network[I2,]), 0, 1) < P_I) # Identifying if they infect
+            
+            rbinom(length(Network[I2,]), 1, P_I) # Identifying if they infect
           
-          as.numeric(runif(length(Network[I2,]), 0, 1) < P_I) # Identifying if they infect
+          Infected <- which(colSums(TransmissionMatrix) > 0)# %>% as.numeric()
+          
+          NewlyInfected <- setdiff(Infected, 
+                                   which(Indivs$Infected == 1))
+          
+        }
         
-        Infected <- which(colSums(TransmissionMatrix) > 0)# %>% as.numeric()
+        if(0){
+          
+          NPairs <- which(Network[I2,]>0)
+          
+          TransmissionMatrix[I2,][NPairs] <- 
+            
+            rbinom(length(NPairs), 1, Network[I2,][NPairs])* # Identifying if they interact
+            
+            as.numeric(runif(length(NPairs), 0, 1) < P_I) # Identifying if they infect
+          
+          Infected <- which(colSums(TransmissionMatrix) > 0)# %>% as.numeric()
+          
+          NewlyInfected <- setdiff(Infected, 
+                                   which(Indivs$Infected == 1))
+          
+        }
         
-        NewlyInfected <- setdiff(Infected, 
-                                 which(Indivs$Infected == 1))
+        if(length(NewlyInfected) > 0){
+          
+          Indivs[NewlyInfected, "Time"] <- s
+          Indivs[NewlyInfected, "Infected"] <- 1
+          
+        }
+        
+        s <- s + 1
         
       }
       
-      if(0){
-        
-        NPairs <- which(Network[I2,]>0)
-        
-        TransmissionMatrix[I2,][NPairs] <- 
-          
-          rbinom(length(NPairs), 1, Network[I2,][NPairs])* # Identifying if they interact
-          
-          as.numeric(runif(length(NPairs), 0, 1) < P_I) # Identifying if they infect
-        
-        Infected <- which(colSums(TransmissionMatrix) > 0)# %>% as.numeric()
-        
-        NewlyInfected <- setdiff(Infected, 
-                                 which(Indivs$Infected == 1))
-        
-      }
+      Indivs
       
-      if(length(NewlyInfected) > 0){
-        
-        Indivs[NewlyInfected, "Time"] <- s
-        Indivs[NewlyInfected, "Infected"] <- 1
-        
-      }
+      # IndivList[[r]] <- Indivs
       
-      s <- s + 1
+      saveRDS(Indivs, file = paste0("Greg Data/Outputs/BISoN/Random/",FocalRep, "_", r, "_", P_I, ".rds"))
+      
+      print(Sys.time() - t1)
       
     }
     
-    Indivs
-    
-    IndivList[[r]] <- Indivs
-    
-    saveRDS(IndivList, file = paste0("Greg Data/Outputs/BISoN/Random/PI_", P_I, "_",  FocalRep, ".rds"))
-    
-    print(Sys.time() - t1)
-    
   }
-  
-  # saveRDS(IndivList, file = paste0("Greg Data/Outputs/BISoN/PI_", pinf, "_",  FocalRep, ".rds"))
   
 }
 
