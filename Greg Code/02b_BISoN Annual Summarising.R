@@ -7,10 +7,10 @@ library(magrittr)
 theme_set(theme_cowplot())
 
 FileList <- 
-  "Greg Data/Outputs/BISoN/Random_Old" %>% 
+  "Greg Data/Outputs/BISoN/Random" %>% 
   dir_ls()
 
-names(FileList) <- "Greg Data/Outputs/BISoN/Random_Old" %>%
+names(FileList) <- "Greg Data/Outputs/BISoN/Random" %>%
   list.files
 
 OutputList <- 
@@ -21,13 +21,7 @@ OutputList <-
     
     print(which(FileList == a))
     
-    b <- (a %>% readRDS)[[a %>% str_split("_") %>% map(3) %>% unlist %>% as.numeric]]
-    
-    # Maxes <- map(b, ~max(.x$Time)) %>% unlist
-    # 
-    # Means <- map(b, ~mean(.x$Time)) %>% unlist
-    
-    # TotalInf <- map(b, ~Prev(.x$Infected)) %>% unlist
+    b <- a %>% readRDS
     
     data.frame(Mean = mean(b$Time), 
                Max = max(b$Time), 
@@ -121,17 +115,7 @@ TimestepList <-
   
   FileList %>% 
   
-  map(function(a){
-    
-    print(which(FileList == a))
-    
-    # b <- a %>% readRDS
-    
-    b <- (a %>% readRDS)[[a %>% str_split("_") %>% map(3) %>% unlist %>% as.numeric]]
-    
-    b
-    
-  })
+  map(readRDS)
 
 TimeStepDF <- 
   TimestepList %>% 

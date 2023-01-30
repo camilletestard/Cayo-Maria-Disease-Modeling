@@ -36,12 +36,12 @@ for(FocalRep in Reps){
   
   RepData <- AggregatedEdges %>% filter(Rep == FocalRep)
   
-  r <- 0
-  
-  # r <- dir_ls("Greg Data/Outputs/BISoN/Random",
-  #             regex = "Greg Data/Outputs/BISoN/Random/" %>%
-  #               paste0(FocalRep)) %>%
-  #   str_split("_") %>% map_chr(2) %>% as.numeric %>% max %>% add(1)
+  r <- dir_ls("Greg Data/Outputs/BISoN/Random",
+              regex = "Greg Data/Outputs/BISoN/Random/" %>%
+                paste0(FocalRep)) %>%
+    str_split("_") %>% 
+    map_chr(2) %>% 
+    as.numeric %>% max %>% add(1)
   
   if(r < 1) r <- 1
   
@@ -55,14 +55,7 @@ for(FocalRep in Reps){
       
       print(r)
       
-      # mygraph <- 
-      #   RepData[,c("From", "To", paste0("draw.", r))] %>% 
-      #   rename(Weight = 3) %>% 
-      #   graph.data.frame(directed = F)
-      
-      AdjMatrix <- 
-        
-        # RepData[,c("From", "To", paste0("draw.", sample(1:1000, 1)))] %>% 
+      Network <- 
         RepData[,c("From", "To", paste0("draw.", r))] %>% 
         rename(Weight = 3) %>% 
         graph.data.frame(directed = F) %>% 
@@ -80,10 +73,9 @@ for(FocalRep in Reps){
       
       Network <- AdjMatrix
       
-      P_I <- runif(1, 0, 1) %>% round(6)
+      P_I <- rnorm(1, MeanInf, InfSD)
       
-      if(P_I < 0) P_I <- 0.000001
-      if(P_I > 1) P_I <- 0.999999
+      if(P_I < 0) P_I <- 0.000001      
       
       s <- 1
       
@@ -101,27 +93,7 @@ for(FocalRep in Reps){
           TransmissionMatrix[I2,] <- 
             
             rbinom(length(Network[I2,]), 1, Network[I2,])* # Identifying if they interact
-            
-            # as.numeric(runif(length(Network[I2,]), 0, 1) < P_I) # Identifying if they infect
-            
             rbinom(length(Network[I2,]), 1, P_I) # Identifying if they infect
-          
-          Infected <- which(colSums(TransmissionMatrix) > 0)# %>% as.numeric()
-          
-          NewlyInfected <- setdiff(Infected, 
-                                   which(Indivs$Infected == 1))
-          
-        }
-        
-        if(0){
-          
-          NPairs <- which(Network[I2,]>0)
-          
-          TransmissionMatrix[I2,][NPairs] <- 
-            
-            rbinom(length(NPairs), 1, Network[I2,][NPairs])* # Identifying if they interact
-            
-            as.numeric(runif(length(NPairs), 0, 1) < P_I) # Identifying if they infect
           
           Infected <- which(colSums(TransmissionMatrix) > 0)# %>% as.numeric()
           
@@ -140,10 +112,6 @@ for(FocalRep in Reps){
         s <- s + 1
         
       }
-      
-      Indivs
-      
-      # IndivList[[r]] <- Indivs
       
       saveRDS(Indivs, file = paste0("Greg Data/Outputs/BISoN/Random/",FocalRep, "_", 
                                     
