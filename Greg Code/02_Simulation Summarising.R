@@ -2,15 +2,15 @@
 # 02a_BISoN Annual Summarising ####
 
 library(tidyverse); library(ggregplot); library(ggforce); library(cowplot); library(fs)
-library(magrittr)
+library(magrittr); library(colorspace); library(lme4); library(lmerTest); library(patchwork)
 
 theme_set(theme_cowplot())
 
 FileList <- 
-  "Greg Data/Outputs/BISoN/Random" %>% 
+  "Greg Data/Outputs/BISoN" %>% 
   dir_ls()
 
-names(FileList) <- "Greg Data/Outputs/BISoN/Random" %>%
+names(FileList) <- "Greg Data/Outputs/BISoN" %>%
   list.files
 
 OutputList <- 
@@ -52,31 +52,70 @@ TestDF %<>% mutate(PostMaria = as.factor(as.numeric(Year %in% c(2018:2021))))
 
 TestDF %<>% mutate_at(c("Mean", "Max"), ~log(.x + 1))
 
-TestDF %>% 
-  ggplot(aes(P_I, Mean)) + 
-  geom_point() +
-  facet_wrap(~Rep) + 
-  geom_smooth()
+# TestDF %>% 
+#   ggplot(aes(P_I, Mean)) + 
+#   geom_point() +
+#   facet_wrap(~Rep) + 
+#   geom_smooth()
+# 
+# TestDF %>% 
+#   ggplot(aes(P_I, exp(Mean), colour = Rep)) + 
+#   geom_point(alpha = 0.2) +
+#   # facet_wrap(~Rep) + 
+#   geom_smooth(method = lm, fill = NA) +
+#   scale_y_log10(limits = c(10, NA)) +
+#   labs(y = "Mean Timestep")
 
-TestDF %>% 
-  ggplot(aes(P_I, exp(Mean), colour = Rep)) + 
-  geom_point(alpha = 0.2) +
-  # facet_wrap(~Rep) + 
-  geom_smooth(method = lm, fill = NA) +
-  scale_y_log10(limits = c(10, NA)) +
-  labs(y = "Mean Timestep")
+(P_I_Figure <- 
+    TestDF %>% 
+    mutate_at("Year", ~factor(.x, levels = c(2015:2017, "[ Maria ]", 2018, 2019, 2021))) %>% 
+    ggplot(aes(P_I, exp(Mean), colour = Year, group = Rep)) + 
+    geom_point(alpha = 0.2) +
+    # facet_wrap(~Rep) + 
+    geom_smooth(method = lm, fill = NA) +
+    scale_y_log10(limits = c(10, NA)) +
+    labs(y = "Mean infection timestep", x = "Pathogen infectivity") +
+    # scale_colour_discrete_sequential("Blues 2") +
+    scale_colour_discrete_divergingx(palette = "PuOR", 
+                                     limits = c(2015:2017, "[ Maria ]", 2018, 2019, 2021)) +    
+    theme(legend.position = "none"))
 
 LM1 <- lm(Mean ~ P_I + PostMaria, data = TestDF)
 
 LM1 %>% summary
 
-library(lme4); library(lmerTest)
-
 LMM1 <- lmer(Mean ~ P_I + PostMaria + (1|Rep), data = TestDF)
 
-LMM1 %>% summary %>% extract2("coefficients") %>% data.frame()
+Coef <- LMM1 %>% summary %>% extract2("coefficients") %>% data.frame()
+ConfInt <- LMM1 %>% confint()
+
+Intercept <- 200
+
+Errors <- 
+  data.frame(P_I = c(0.1, 0.2), 
+             Mean = c(Intercept, exp(log(Intercept) + Coef[3, 1])),
+             Lower = c(NA, exp(log(Intercept) + ConfInt[5, 1])),
+             Upper = c(NA, exp(log(Intercept) + ConfInt[5, 2])))
+
+(P_I_Figure <- 
+  P_I_Figure +
+  geom_line(data = Errors, aes(P_I, Mean), 
+            colour = "white",
+            inherit.aes = F, size = 2, lty = 1) +
+  geom_errorbar(data = Errors, aes(x = P_I, ymin = Lower, ymax = Upper), 
+                colour = "white",
+                width = 0.01, size = 2,
+                inherit.aes = F) +
+  geom_point(data = Errors, aes(P_I, Mean), inherit.aes = F, size = 2.5, colour = "white") +
+  geom_point(data = Errors, aes(P_I, Mean), inherit.aes = F))
+
+ggsave("Figures/P_I_Mean.jpeg", units = "mm", width = 150, height = 150, dpi = 300)
 
 # Converting to timesteps ####
+
+TimestepLabelDF <- data.frame(Population = c("F", "K", "S", "V"), 
+                              Time = 2, 
+                              PropInf = 0.9)
 
 TimestepList <- 
   
@@ -91,143 +130,51 @@ TimeStepDF %<>%
   mutate_at("File", ~str_remove(.x, ".rds")) %>% 
   separate(File, sep = "_", into = c("Rep", "R", "P_I")) %>% 
   mutate_at(c("P_I", "R"), as.numeric) %>%
-  mutate(File = paste(Rep, R, P_I, sep = "_"))
-
-TimeStepDF %<>% 
+  mutate(File = paste(Rep, R, P_I, sep = "_")) %>% 
+  
   mutate_at("Rep", ~str_replace(.x, "KK", "K")) %>% 
   mutate(Population = substr(Rep, 1, 1), 
          Year = substr(Rep, 2, 5)) %>%   
+  
   mutate(PostMaria = as.factor(as.numeric(Year %in% c(2018:2021))))
 
-# MeanLevels <- 
-#   TimeStepDF %>% 
-#   group_by(Rep, Time, PostMaria) %>% 
-#   summarise_at("PropInf", mean)
+(TimeFigure <- 
+    TimeStepDF %>%
+    mutate(File = paste(Rep, R, P_I, sep = "_")) %>% 
+    mutate_at("Year", ~factor(.x, levels = c(2015:2017, "[ Maria ]", 2018, 2019, 2021))) %>% 
+    ggplot(aes(Time + 1, PropInf, colour = Year)) + 
+    geom_line(aes(group = File), alpha = 0.05) + 
+    geom_line(data = . %>% filter(Time > 10000), aes(group = File), alpha = 1) + 
+    scale_x_log10() + scale_y_continuous(breaks = c(0:2/2)) +
+    # scale_colour_discrete_diverging(palette = "Red-Green") +
+    scale_colour_discrete_divergingx(palette = "PuOR", 
+                                     limits = c(2015:2017, "[ Maria ]", 2018, 2019, 2021)) +
+    labs(colour = NULL, x = "Time step", y = "Proportion infected") +
+    theme(legend.position = "top", legend.justification = 0.5) +
+    
+    # geom_smooth(aes(group = Rep), alpha = 0.5, fill = NA) + 
+    facet_grid(Population ~ .) + 
+    # theme(strip.background = element_rect(fill = "white", colour = NA)) +
+    theme(strip.background = element_blank(),
+          strip.text = element_blank()) +
+    geom_text(data = TimestepLabelDF, 
+              inherit.aes = F,
+              aes(x = Time + 1, y = PropInf, 
+                  label = paste0("Population: ", Population))) +
+    guides(colour = guide_legend(reverse = F,
+                                 direction = "horizontal",
+                                 # title.position = "left",
+                                 # title.vjust = 0.25, title.hjust = 1,
+                                 label.position = "top",
+                                 # label.hjust = 0.5,
+                                 # label.vjust = 1.5,
+                                 label.theme = element_text(angle = 0), nrow = 1)) +
+    NULL)
 
-TimeStepDF %>%
-  mutate_at("PostMaria", ~factor(.x, levels = c("1", "0"))) %>% 
-  mutate(File = paste(Rep, R, P_I, sep = "_")) %>% 
-  ggplot(aes(Time + 1, PropInf, colour = PostMaria)) + 
-  geom_line(aes(group = File), alpha = 0.05) + 
-  geom_line(data = . %>% filter(Time > 10000), aes(group = File), alpha = 1) + 
-  scale_x_log10() + scale_y_continuous(breaks = c(0:2/2)) +
-  scale_colour_manual(values = c(AlberColours[[1]], AlberColours[[2]]), 
-                      labels = rev(c("Pre-Maria", "Post-Maria"))) +
-  labs(colour = NULL, x = "Time step", y = "Proportion infected") +
-  theme(legend.position = "top") +
-  
-  # geom_smooth(aes(group = Rep), alpha = 0.5, fill = NA) + 
-  facet_grid(Population ~ .) + 
-  theme(strip.background = element_rect(fill = "white", colour = NA)) +
-  NULL
-
-ggsave("TimeFigure.jpeg", units = "mm", 
+ggsave("Figures/TimeFigure.jpeg", units = "mm", 
        width = 150, height = 150, dpi = 300)
 
-library(colorspace)
+TimeFigure + P_I_Figure
 
-TimeStepDF %>%
-  mutate(File = paste(Rep, R, P_I, sep = "_")) %>% 
-  mutate_at("Year", ~factor(.x, levels = c(2015:2017, "[ Maria ]", 2018, 2019, 2021))) %>% 
-  ggplot(aes(Time + 1, PropInf, colour = Year)) + 
-  geom_line(aes(group = File), alpha = 0.05) + 
-  geom_line(data = . %>% filter(Time > 10000), aes(group = File), alpha = 1) + 
-  scale_x_log10() + scale_y_continuous(breaks = c(0:2/2)) +
-  # scale_colour_discrete_diverging(palette = "Red-Green") +
-  scale_colour_discrete_divergingx(palette = "PuOR", 
-                                   limits = c(2015:2017, "[ Maria ]", 2018, 2019, 2021)) +
-  labs(colour = NULL, x = "Time step", y = "Proportion infected") +
-  theme(legend.position = "top", legend.justification = 0.5) +
-  
-  # geom_smooth(aes(group = Rep), alpha = 0.5, fill = NA) + 
-  facet_grid(Population ~ .) + 
-  theme(strip.background = element_rect(fill = "white", colour = NA)) +
-  guides(colour = guide_legend(reverse = F,
-                               direction = "horizontal",
-                               # title.position = "left",
-                               # title.vjust = 0.25, title.hjust = 1,
-                               label.position = "top",
-                               # label.hjust = 0.5,
-                               # label.vjust = 1.5,
-                               label.theme = element_text(angle = 0), nrow = 1)) +
-  NULL
-
-ggsave("TimeFigure.jpeg", units = "mm", 
-       width = 150, height = 150, dpi = 300)
-
-######
-
-Means <- 
-  
-  IndivListList %>% 
-  
-  map(function(a){
-    
-    map(a, ~mean(.x$Time)) %>% unlist
-    
-  }) %>% bind_rows()
-
-(LongMaxes <- Maxes %>% reshape2::melt() %>% rename(Max = 2) %>% 
-    bind_cols(Means %>% reshape2::melt() %>% rename(Mean = 2) %>% dplyr::select(-1)))
-
-LongMaxes %<>% 
-  separate(variable, sep = "_", into = c("PI", "Rep"))
-
-LongMaxes %<>% 
-  mutate_at("Rep", ~str_replace(.x, "KK", "K")) %>% 
-  mutate(Population = substr(Rep, 1, 1), 
-         Year = substr(Rep, 2, 5) %>% as.numeric)
-
-LongMaxes %<>% mutate(PostMaria = as.factor(as.numeric(Year >= 2018)))
-
-library(patchwork)
-
-LongMaxes %>% 
-  ggplot(aes(as.factor(Year), Max, colour = PostMaria)) +
-  geom_boxplot() +
-  geom_sina(alpha = 0.1) +
-  facet_grid(PI~Population) + 
-  # ggtitle("Max") +
-  labs(x = "Year", y = "Maximum time step infected") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  scale_colour_manual(values = c(AlberColours[[1]], AlberColours[[2]])) +
-  
-  LongMaxes %>% 
-  ggplot(aes(as.factor(Year), Mean, colour = PostMaria)) +
-  geom_boxplot() +
-  geom_sina(alpha = 0.1) +
-  facet_grid(PI~Population) + 
-  # ggtitle("Mean") +
-  labs(x = "Year", y = "Mean time step infected") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  scale_colour_manual(values = c(AlberColours[[1]], AlberColours[[2]])) +
-  
-  plot_layout(guides = "collect")
-
-ggsave("Figures/Pre_Post_BISoN.jpeg", units = "mm", width = 350, height = 150)
-
-
-# Running an LM ####
-
-IndivListList <- FileList[1] %>% map(readRDS)
-
-TestDF <- IndivListList %>% 
-  map(~bind_rows(.x, .id = "Sim")) %>% 
-  bind_rows(.id = "Rep")
-
-TestDF %<>% 
-  # separate(Rep, sep = "_", into = c("PI", "Rep"))
-  mutate(PI = substr(Rep, 1, 3) %>% as.numeric) %>% 
-  mutate(Rep = str_split(Rep, "_") %>% map_chr(first)) %>% 
-  mutate(Rep = str_split(Rep, "_") %>% map_chr(last))
-
-TestDF %<>% 
-  mutate_at("Rep", ~str_replace(.x, "KK", "K")) %>% 
-  mutate(Population = substr(Rep, 1, 1), 
-         Year = substr(Rep, 2, 5) %>% as.numeric)
-
-TestDF %<>% mutate(PostMaria = as.factor(as.numeric(Year >= 2018)))
-
-LM1 <- lm(Time ~ as.factor(PI) + PostMaria + Rep, data = TestDF)
-
-LM1 %>% summary
+ggsave("Figures/Figure2.jpeg", units = "mm", 
+       width = 250, height = 150, dpi = 300)
