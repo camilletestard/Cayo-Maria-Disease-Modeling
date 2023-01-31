@@ -52,39 +52,25 @@ TestDF %<>% mutate(PostMaria = as.factor(as.numeric(Year %in% c(2018:2021))))
 
 TestDF %<>% mutate_at(c("Mean", "Max"), ~log(.x + 1))
 
-# TestDF %>% 
-#   ggplot(aes(P_I, Mean)) + 
-#   geom_point() +
-#   facet_wrap(~Rep) + 
-#   geom_smooth()
-# 
-# TestDF %>% 
-#   ggplot(aes(P_I, exp(Mean), colour = Rep)) + 
-#   geom_point(alpha = 0.2) +
-#   # facet_wrap(~Rep) + 
-#   geom_smooth(method = lm, fill = NA) +
-#   scale_y_log10(limits = c(10, NA)) +
-#   labs(y = "Mean Timestep")
+TestDF %<>% filter(between(Mean, 3, 7))
 
-(P_I_Figure <- 
-    TestDF %>% 
-    mutate_at("Year", ~factor(.x, levels = c(2015:2017, "[ Maria ]", 2018, 2019, 2021))) %>% 
-    ggplot(aes(P_I, exp(Mean), colour = Year, group = Rep)) + 
-    geom_point(alpha = 0.2) +
-    # facet_wrap(~Rep) + 
-    geom_smooth(method = lm, fill = NA) +
-    scale_y_log10(limits = c(10, NA)) +
-    labs(y = "Mean infection timestep", x = "Pathogen infectivity") +
-    # scale_colour_discrete_sequential("Blues 2") +
-    scale_colour_discrete_divergingx(palette = "PuOR", 
-                                     limits = c(2015:2017, "[ Maria ]", 2018, 2019, 2021)) +    
-    theme(legend.position = "none"))
-
-LM1 <- lm(Mean ~ P_I + PostMaria, data = TestDF)
+LM1 <- lm(Mean ~ P_I + PostMaria + Population + Year, data = TestDF)
 
 LM1 %>% summary
 
+qplot(TestDF$Mean, LM1 %>% fitted)
+qplot(LM1 %>% fitted, LM1 %>% resid)
+
+qplot(LM1 %>% resid)
+shapiro.test(LM1 %>% resid %>% sample(4999))
+
 LMM1 <- lmer(Mean ~ P_I + PostMaria + (1|Rep), data = TestDF)
+
+qplot(TestDF$Mean, LMM1 %>% fitted)
+qplot(LMM1 %>% fitted, LMM1 %>% resid)
+
+qplot(LMM1 %>% resid)
+shapiro.test(LMM1 %>% resid %>% sample(4999))
 
 Coef <- LMM1 %>% summary %>% extract2("coefficients") %>% data.frame()
 ConfInt <- LMM1 %>% confint()
@@ -97,28 +83,45 @@ Errors <-
              Lower = c(NA, exp(log(Intercept) + ConfInt[5, 1])),
              Upper = c(NA, exp(log(Intercept) + ConfInt[5, 2])))
 
+PolygonDF <- 
+  data.frame(P_I = Errors[c(1, 2, 2, 1), "P_I"],
+             Mean = unlist(c(Errors[1, "Mean"], Errors[2, c("Upper", "Lower")], Errors[1, "Mean"])))
+
 (P_I_Figure <- 
-  P_I_Figure +
-  geom_line(data = Errors, aes(P_I, Mean), 
-            colour = "white",
-            inherit.aes = F, size = 2, lty = 1) +
-  geom_errorbar(data = Errors, aes(x = P_I, ymin = Lower, ymax = Upper), 
-                colour = "white",
-                width = 0.01, size = 2,
-                inherit.aes = F) +
-  geom_point(data = Errors, aes(P_I, Mean), inherit.aes = F, size = 2.5, colour = "white") +
-  geom_point(data = Errors, aes(P_I, Mean), inherit.aes = F))
+    TestDF %>% 
+    mutate_at("Year", ~factor(.x, levels = c(2015:2017, "\U2022 Maria \U2022", 2018, 2019, 2021))) %>% 
+    ggplot(aes(P_I, exp(Mean), colour = Year, group = Rep)) + 
+    geom_point(alpha = 0.2) +
+    # facet_wrap(~Rep) + 
+    geom_smooth(method = lm, fill = NA) +
+    scale_y_log10(limits = c(10, NA)) +
+    labs(y = "Mean infection timestep", x = "Pathogen infectivity") +
+    # scale_colour_discrete_sequential("Blues 2") +
+    scale_colour_discrete_divergingx(palette = "PuOR", 
+                                     limits = c(2015:2017, "[ Maria ]", 2018, 2019, 2021)) +    
+    theme(legend.position = "none"))
+
+(P_I_Figure <- 
+    P_I_Figure +
+    geom_polygon(data = PolygonDF[1:3,], aes(P_I, Mean), inherit.aes = F, 
+                 colour = "black",
+                 fill = "white", alpha = 0.6) +
+    geom_line(data = Errors, aes(P_I, Mean),
+              colour = "black",
+              inherit.aes = F,# size = 2, 
+              lty = 2) +
+    geom_errorbar(data = Errors, aes(x = P_I, ymin = Lower, ymax = Upper),
+                  colour = "black",
+                  width = 0.01, #size = 1.25,
+                  inherit.aes = F) +
+    geom_point(data = Errors, aes(P_I, Mean), inherit.aes = F, size = 2.5, colour = "white") +
+    geom_point(data = Errors, aes(P_I, Mean), inherit.aes = F))
 
 ggsave("Figures/P_I_Mean.jpeg", units = "mm", width = 150, height = 150, dpi = 300)
 
 # Converting to timesteps ####
 
-TimestepLabelDF <- data.frame(Population = c("F", "K", "S", "V"), 
-                              Time = 2, 
-                              PropInf = 0.9)
-
 TimestepList <- 
-  
   FileList %>% map(readRDS)
 
 TimeStepDF <- 
@@ -141,14 +144,14 @@ TimeStepDF %<>%
 (TimeFigure <- 
     TimeStepDF %>%
     mutate(File = paste(Rep, R, P_I, sep = "_")) %>% 
-    mutate_at("Year", ~factor(.x, levels = c(2015:2017, "[ Maria ]", 2018, 2019, 2021))) %>% 
+    mutate_at("Year", ~factor(.x, levels = c(2015:2017, "\U2022 Maria \U2022", 2018, 2019, 2021))) %>% 
     ggplot(aes(Time + 1, PropInf, colour = Year)) + 
     geom_line(aes(group = File), alpha = 0.05) + 
     geom_line(data = . %>% filter(Time > 10000), aes(group = File), alpha = 1) + 
     scale_x_log10() + scale_y_continuous(breaks = c(0:2/2)) +
     # scale_colour_discrete_diverging(palette = "Red-Green") +
     scale_colour_discrete_divergingx(palette = "PuOR", 
-                                     limits = c(2015:2017, "[ Maria ]", 2018, 2019, 2021)) +
+                                     limits = c(2015:2017, "\U2022 Maria \U2022", 2018, 2019, 2021)) +
     labs(colour = NULL, x = "Time step", y = "Proportion infected") +
     theme(legend.position = "top", legend.justification = 0.5) +
     
@@ -174,7 +177,8 @@ TimeStepDF %<>%
 ggsave("Figures/TimeFigure.jpeg", units = "mm", 
        width = 150, height = 150, dpi = 300)
 
-TimeFigure + P_I_Figure
+(TimeFigure + P_I_Figure) + 
+  plot_annotation(tag_levels = "A")
 
 ggsave("Figures/Figure2.jpeg", units = "mm", 
-       width = 250, height = 150, dpi = 300)
+       width = 250, height = 150, dpi = 600)
