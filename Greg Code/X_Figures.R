@@ -1,7 +1,7 @@
 
 # X_Figures ####
 
-library(tidyverse); library(cowplot)
+library(tidyverse); library(cowplot); library(fs); library(magrittr)
 
 theme_set(theme_cowplot())
 
@@ -26,6 +26,7 @@ EdgeListList %>%
 
 DiffDF <- 
   EdgeListList %>% 
+  mutate_at("Rep", ~str_replace(.x, "KK", "K")) %>% 
   group_by(Rep, Date, Year) %>% 
   count %>% group_by(Rep, Year) %>% 
   mutate(DateGap = c(0, diff(as.numeric(Date))))
@@ -36,17 +37,38 @@ DiffDF %>%
   SinaGraph("Rep", "DateGap", Just = T) + 
   scale_y_log10()
 
+LongMaxes %>% 
+  group_by(Rep) %>% 
+  summarise_at(c("Mean", "Max"), mean) %>% 
+  left_join(DiffDF %>% 
+              group_by(Rep) %>% 
+              summarise_at("DateGap", mean)) %>% 
+  filter(DateGap < 4) %>% 
+  ggplot(aes(DateGap, Mean)) +
+  # geom_point() + 
+  geom_text(aes(label = Rep)) +
+  geom_smooth(method = lm)
+
 # Plotting temporal windows ####
 
-Reps <- EdgeListList$Rep %>% unique %>% sort
+Window <- 30
 
-FocalRep <- Reps[1]
+SubEdgeList <-
+  EdgeListList
 
-SubEdgeList <- EdgeListList %>% filter(Rep == FocalRep)
+SubEdgeList %<>% 
+  group_by(Rep) %>% 
+  mutate(NDate = Date - min(Date) + 1)
 
-SubEdgeList %<>% mutate(NDate = Date - min(Date) + 1)
+SubEdgeList %>% 
+  ggplot(aes(Rep, NDate)) + 
+  geom_point() + 
+  coord_flip()
 
-FullDays <- max(SubEdgeList$Date) - min(SubEdgeList$Date) - Window
+FullDays <- 
+  max(SubEdgeList$NDate) - 
+  min(SubEdgeList$NDate) - 
+  Window
 
 library(tidygraph)
 
@@ -60,6 +82,7 @@ GraphList <-
     
     SubSubEdgeList <- 
       SubEdgeList %>% 
+      filter(Rep == FocalRep) %>% 
       filter(NDate %in% (1:Window + Day)) %>% 
       dplyr::select(From, To) %>% 
       # graph_from_data_frame %>% #as_tbl_graph()
