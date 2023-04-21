@@ -39,7 +39,7 @@ OutputDF %<>%
 OutputDF %<>% 
   mutate_at("R", as.numeric)
 
-# Testing ####
+# P_I Panel ####
 
 TestDF <- OutputDF
 
@@ -49,6 +49,8 @@ TestDF %<>%
          Year = substr(Rep, 2, 5))
 
 TestDF %<>% mutate(PostMaria = as.factor(as.numeric(Year %in% c(2018:2021))))
+
+Intercept <- mean(TestDF$Mean)
 
 TestDF %<>% mutate_at(c("Mean", "Max"), ~log(.x + 1))
 
@@ -75,7 +77,7 @@ shapiro.test(LMM1 %>% resid %>% sample(4999))
 Coef <- LMM1 %>% summary %>% extract2("coefficients") %>% data.frame()
 ConfInt <- LMM1 %>% confint()
 
-Intercept <- 200
+# Intercept <- 200
 
 Errors <- 
   data.frame(P_I = c(0.1, 0.2), 
@@ -83,9 +85,21 @@ Errors <-
              Lower = c(NA, exp(log(Intercept) + ConfInt[5, 1])),
              Upper = c(NA, exp(log(Intercept) + ConfInt[5, 2])))
 
+Coef %>% # Calculating "times faster" infection statistic
+  dplyr::select(1) %>% 
+  cbind(ConfInt[3:5,]) %>% 
+  mutate_all(exp) %>% mutate_all(~round(.x, 3)) %>% divide_by(1, .)
+
+Coef %>% # Calculating "times faster" infection statistic for 0.1 P_I
+  dplyr::select(1) %>% 
+  cbind(ConfInt[3:5,]) %>% divide_by(10) %>% 
+  mutate_all(exp) %>% mutate_all(~round(.x, 3)) %>% divide_by(1, .)
+
 PolygonDF <- 
   data.frame(P_I = Errors[c(1, 2, 2, 1), "P_I"],
-             Mean = unlist(c(Errors[1, "Mean"], Errors[2, c("Upper", "Lower")], Errors[1, "Mean"])))
+             Mean = unlist(c(Errors[1, "Mean"], 
+                             Errors[2, c("Upper", "Lower")], 
+                             Errors[1, "Mean"])))
 
 (P_I_Figure <- 
     TestDF %>% 
@@ -95,31 +109,34 @@ PolygonDF <-
     # facet_wrap(~Rep) + 
     geom_smooth(method = lm, fill = NA) +
     scale_y_log10(limits = c(10, NA)) +
-    labs(y = "Mean infection timestep", x = "Pathogen infectivity") +
+    labs(y = "Mean infection timestep", 
+         x = "Pathogen infectivity") +
     # scale_colour_discrete_sequential("Blues 2") +
     scale_colour_discrete_divergingx(palette = "PuOR", 
                                      limits = c(2015:2017, "[ Maria ]", 2018, 2019, 2021)) +    
     theme(legend.position = "none"))
 
-(P_I_Figure <- 
-    P_I_Figure +
-    geom_polygon(data = PolygonDF[1:3,], aes(P_I, Mean), inherit.aes = F, 
-                 colour = "black",
-                 fill = "white", alpha = 0.6) +
-    geom_line(data = Errors, aes(P_I, Mean),
-              colour = "black",
-              inherit.aes = F,# size = 2, 
-              lty = 2) +
-    geom_errorbar(data = Errors, aes(x = P_I, ymin = Lower, ymax = Upper),
-                  colour = "black",
-                  width = 0.01, #size = 1.25,
-                  inherit.aes = F) +
-    geom_point(data = Errors, aes(P_I, Mean), inherit.aes = F, size = 2.5, colour = "white") +
-    geom_point(data = Errors, aes(P_I, Mean), inherit.aes = F))
+# (P_I_Figure <- 
+#     P_I_Figure +
+#     geom_polygon(data = PolygonDF[1:3,], aes(P_I, Mean), inherit.aes = F, 
+#                  colour = "black",
+#                  fill = "white", alpha = 0.6) +
+#     geom_line(data = Errors, aes(P_I, Mean),
+#               colour = "black",
+#               inherit.aes = F,# size = 2, 
+#               lty = 2) +
+#     geom_errorbar(data = Errors, aes(x = P_I, ymin = Lower, ymax = Upper),
+#                   colour = "black",
+#                   width = 0.01, #size = 1.25,
+#                   inherit.aes = F) +
+#     geom_point(data = Errors, aes(P_I, Mean), inherit.aes = F, size = 2.5, colour = "white") +
+#     geom_point(data = Errors, aes(P_I, Mean), inherit.aes = F))
 
-ggsave("Figures/P_I_Mean.jpeg", units = "mm", width = 150, height = 150, dpi = 300)
+# Timestep panel ####
 
-# Converting to timesteps ####
+TimestepLabelDF <- data.frame(Population = c("F", "K", "S", "V"), 
+                              Time = 2, 
+                              PropInf = 0.9)
 
 TimestepList <- 
   FileList %>% map(readRDS)
@@ -148,13 +165,13 @@ TimeStepDF %<>%
     ggplot(aes(Time + 1, PropInf, colour = Year)) + 
     geom_line(aes(group = File), alpha = 0.05) + 
     geom_line(data = . %>% filter(Time > 10000), aes(group = File), alpha = 1) + 
-    scale_x_log10() + scale_y_continuous(breaks = c(0:2/2)) +
+    # scale_x_log10() + 
+    scale_y_continuous(breaks = c(0:2/2)) +
     # scale_colour_discrete_diverging(palette = "Red-Green") +
     scale_colour_discrete_divergingx(palette = "PuOR", 
                                      limits = c(2015:2017, "\U2022 Maria \U2022", 2018, 2019, 2021)) +
     labs(colour = NULL, x = "Time step", y = "Proportion infected") +
     theme(legend.position = "top", legend.justification = 0.5) +
-    
     # geom_smooth(aes(group = Rep), alpha = 0.5, fill = NA) + 
     facet_grid(Population ~ .) + 
     # theme(strip.background = element_rect(fill = "white", colour = NA)) +
@@ -174,11 +191,132 @@ TimeStepDF %<>%
                                  label.theme = element_text(angle = 0), nrow = 1)) +
     NULL)
 
-ggsave("Figures/TimeFigure.jpeg", units = "mm", 
-       width = 150, height = 150, dpi = 300)
-
 (TimeFigure + P_I_Figure) + 
   plot_annotation(tag_levels = "A")
 
 ggsave("Figures/Figure2.jpeg", units = "mm", 
+       width = 250, height = 150, dpi = 600)
+
+(TimeFigure2 <- 
+    TimeStepDF %>%
+    mutate(Population = paste0("Population: ", Population)) %>% 
+    mutate(File = paste(Rep, R, P_I, sep = "_")) %>% 
+    mutate_at("Year", ~factor(.x, levels = c(2015:2017, "\U2022 Maria \U2022", 2018, 2019, 2021))) %>% 
+    ggplot(aes(Time + 1, PropInf, colour = Year)) + 
+    geom_line(aes(group = File), alpha = 0.05) + 
+    geom_line(data = . %>% filter(Time > 10000), aes(group = File), alpha = 1) + 
+    # scale_x_log10() + 
+    scale_y_continuous(breaks = c(0:2/2)) +
+    scale_x_continuous(limits = c(0, 1500)) +
+    # scale_colour_discrete_diverging(palette = "Red-Green") +
+    scale_colour_discrete_divergingx(palette = "PuOR", 
+                                     limits = c(2015:2017, "\U2022 Maria \U2022", 2018, 2019, 2021)) +
+    labs(colour = NULL, x = "Time step", y = "Proportion infected") +
+    # theme(legend.position = "none") +
+    theme(legend.position = "top", legend.justification = 0.5) +
+    facet_grid(Population ~ .) + 
+    # theme(strip.background = element_rect(fill = "white", colour = NA)) +
+    theme(strip.background = element_blank()) +#,
+    # axis.text = element_blank(), axis.ticks = element_blank(),axis.title = element_blank(),
+    # strip.text = element_blank()) +
+    # geom_text(data = TimestepLabelDF %>% mutate(Time = 1350, PropInf = 0.25),
+    #           inherit.aes = F,
+    #           hjust = 1,
+    #           aes(x = Time, y = PropInf,
+    #               label = paste0("Population: ", Population))) +
+    guides(colour = guide_legend(reverse = F,
+                                 direction = "horizontal",
+                                 # title.position = "left",
+                                 # title.vjust = 0.25, title.hjust = 1,
+                                 label.position = "top",
+                                 # label.hjust = 0.5,
+                                 # label.vjust = 1.5,
+                                 label.theme = element_text(angle = 0), nrow = 1)) +
+    NULL)
+
+ggsave("Figures/NonLogged.jpeg", units = "mm", 
+       width = 100, height = 100, dpi = 600)
+
+(TimeFigure2 + P_I_Figure) + 
+  plot_annotation(tag_levels = "A")
+
+ggsave("Figures/Figure2b.jpeg", units = "mm", 
+       width = 250, height = 150, dpi = 600)
+
+# Adding error bars instead ####
+
+ConfInt
+
+CoefDF <- 
+  Coef[2:3,] %>% 
+  cbind(ConfInt[4:5,]) %>% 
+  rename(Lower = 6, Upper = 7)
+
+CoefDF[1, c("Estimate", "Lower", "Upper")] <-
+  CoefDF[1, c("Estimate", "Lower", "Upper")]/10
+
+EffectPlot <- 
+  CoefDF %>% 
+  rownames_to_column() %>% 
+  ggplot(aes(rowname, Estimate)) +
+  geom_hline(lty = 2, alpha = 0.3, yintercept = 0) +
+  geom_errorbar(aes(ymin = Lower, ymax = Upper), width = 0.5) +
+  geom_point(size = 2) +
+  geom_point(colour = "white") +
+  scale_x_discrete(labels = c("+10% Infectivity", "Hurricane")) +
+  theme(axis.text.x = element_text(angle = 20, hjust = 1)) +
+  labs(y = "Effect estimate", x = NULL)
+
+(TimeFigure2 + 
+    theme(axis.title.x = element_text(vjust = 10)) +
+    P_I_Figure + 
+    theme(axis.title.x = element_text(vjust = 10)) +
+    EffectPlot) + 
+  plot_layout(widths = c(4, 4, 1)) +
+  plot_annotation(tag_levels = "A")
+
+ggsave("Figures/Figure1c.jpeg", units = "mm", 
+       width = 250, height = 150, dpi = 600)
+
+library(MCMCglmm)
+
+MCMC1 <- MCMCglmm(Mean ~ P_I + PostMaria, random =~Rep, data = TestDF)
+
+# MCMC1b <- MCMCglmm(Mean ~ P_I + PostMaria, data = TestDF)
+
+MCMCOutput <- 
+  MCMC1$Sol %>% data.frame %>% 
+  mutate_at("P_I", ~.x/10) %>% 
+  dplyr::select(P_I, PostMaria1) %>% 
+  pivot_longer(1:2, names_to = "rowname", values_to = "Estimate")
+
+CoefDF <- MCMC1 %>% summary %>% extract2(5) %>% as.data.frame %>% 
+  rename(Lower = 2, Upper = 3, Estimate = 1) %>% 
+  slice(2:3)
+
+CoefDF[1, c("Estimate", "Lower", "Upper")] <-
+  CoefDF[1, c("Estimate", "Lower", "Upper")]/10
+
+(EffectPlot <- 
+  CoefDF %>% 
+  rownames_to_column() %>% 
+  ggplot(aes(rowname, Estimate)) +
+  geom_violin(data = MCMCOutput, scale = "width", fill = AlberColours[[1]], alpha = 0.3, colour = NA) +
+  geom_hline(lty = 2, alpha = 0.3, yintercept = 0) +
+  geom_errorbar(aes(ymin = Lower, ymax = Upper), width = 0.5) +
+  geom_point(size = 2) +
+  geom_point(colour = "white") +
+  scale_x_discrete(labels = c("+10% Infectivity", "Hurricane")) +
+  theme(axis.text.x = element_text(angle = 20, hjust = 1)) +
+  labs(y = "Effect estimate", x = NULL))
+
+(TimeFigure2 + 
+    theme(axis.title.x = element_text(vjust = 10)) +
+    P_I_Figure + 
+    theme(axis.title.x = element_text(vjust = 10)) +
+    EffectPlot) + 
+  plot_layout(widths = c(4, 4, 1)) +
+  plot_annotation(tag_levels = "A")
+
+ggsave("Figures/Figure1c.jpeg", units = "mm", 
        width = 250, height = 150, dpi = 600)
