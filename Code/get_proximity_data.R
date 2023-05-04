@@ -15,7 +15,7 @@ library(stringr)
 library(ggplot2)
 
 #Load functions
-setwd("~/Documents/GitHub/Cayo-Maria-Survival/")
+setwd("~/Documents/GitHub/Cayo-Maria-Disease-Modeling/")
 source("Code/Functions/functions_GlobalNetworkMetrics.R")
 
 
@@ -223,7 +223,7 @@ df_obs_agg$ID1 = factor(df_obs_agg$ID1, levels = unique_names); df_obs_agg$ID2 =
 df_obs_agg$ID1_id = as.integer(df_obs_agg$ID1); df_obs_agg$ID2_id = as.integer(df_obs_agg$ID2)
 df_obs_agg$dyad_id = factor(df_obs_agg$dyad_id, levels=df_obs_agg$dyad_id)
 
-setwd("~/Documents/GitHub/Cayo-Maria-Survival/Data/R.Data/")
+setwd("~/Documents/GitHub/Cayo-Maria-Disease-Modeling/Data/R.Data/")
 save(edgelist.all,file="proximity_data.RData")
 
 

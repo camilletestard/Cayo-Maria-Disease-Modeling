@@ -40,7 +40,15 @@ calcMasterEL    <- function(unqIDs){ #unq IDs only include focal individuals. I.
 calcEdgeList    <- function(rscans, masterEL){
   
   partners = str_split(rscans$in.proximity, c(","), simplify = TRUE) #split proximity partner by ","
-  focalID = as.character(rscans$focalID)
+  partners[is.na(partners[,1]),1]=""
+  focalID = as.character(rscans$focal.monkey)
+  
+  #Remove focal from the proximity matrix
+  for (pa in 1:nrow(partners)){
+    partners[pa,] = str_trim(partners[pa,]) 
+    partners[pa,partners[pa,]==focalID[pa]]=""
+  }
+  
   a = cbind(focalID,partners) #bind focal ID and partner together
   
   PP <- NULL  
@@ -124,6 +132,7 @@ calcEdgeList_groom    <- function(rscans, masterEL){
   
   return(masterEL)
 }
+
 
 ##################################################
 
