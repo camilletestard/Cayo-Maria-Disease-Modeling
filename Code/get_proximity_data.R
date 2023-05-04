@@ -1,7 +1,7 @@
 #Get_proximity_data.R
 #This script aggregates the proximity data from all groups and years from 2015 to 2021
-#for the cayo database. The output of this script will be used for simulating disease 
-#transmission.
+#from the cayo database. The output of this script will be used to generate 
+# networks with bison.
 #C Testard August 2022
 
 library(stringr)
@@ -15,22 +15,30 @@ library(stringr)
 library(ggplot2)
 
 #Load functions
-setwd("~/Documents/GitHub/Cayo-Maria-Disease-Modeling/")
+setwd("~/Documents/GitHub/Cayo-Maria-Survival/")
 source("Code/Functions/functions_GlobalNetworkMetrics.R")
 
 
-group = c("F","V","KK","V","F","F","KK","V","V","KK","S","V","F","V")
-years = c(2015,2015,2015,
-          2016,2016,2017,2017,2017,
-          2018, 2018,2019, 2019,2021,2021)
-groupyears = c("F2015","V2015","KK2015",
-               "V2016","F2016","F2017",
-               "KK2017","V2017","V2018","KK2018",
-               "S2019","V2019","F2021","V2021")
+# group = c("F","V","KK","V","F","F","KK","V","V","KK","S","V","F","V")
+# years = c(2015,2015,2015,
+#           2016,2016,2017,2017,2017,
+#           2018, 2018,2019, 2019,2021,2021)
+# groupyears = c("F2015","V2015","KK2015",
+#                "V2016","F2016","F2017",
+#                "KK2017","V2017","V2018","KK2018",
+#                "S2019","V2019","F2021","V2021")
 
-gy=12#16
+group = c("F","KK","F","HH","F","V","R","KK","R","V","F","HH","F","KK","V","V","KK","S","V","F","V","TT","V")
+years = c(2013, 2013,2014,2014,2015,2015,2015,2015,
+          2016,2016,2016,2016,2017,2017,2017,
+          2018,2018, 2019, 2019,2021,2021,2022,2022)
+groupyears = c("F2013","KK2013","F2014","HH2014","F2015","V2015","R2015","KK2015",
+               "R2016","V2016","F2016","HH2016","F2017","KK2017","V2017",
+               "V2018","KK2018","S2019","V2019","F2021","V2021","TT2022","V2022")
+
+gy=16
 edgelist.all = data.frame()
-savePath = '~/Documents/GitHub/Cayo-Maria-Disease-Modeling/Data/R.Data/'
+savePath = '~/Documents/GitHub/Cayo-Maria-Survival/Data/R.Data/'
 
 for (gy in 1:length(groupyears)){ #for all group & years
   
@@ -40,7 +48,7 @@ for (gy in 1:length(groupyears)){ #for all group & years
   if (years[gy]==2018) {
     
     #Load data
-    setwd('~/Documents/GitHub/Cayo-Maria-Disease-Modeling/Data/Data All Cleaned/BehavioralDataFiles')
+    setwd('~/Documents/GitHub/Cayo-Maria-Survival/Data/Data All Cleaned/BehavioralDataFiles')
     scans2018= read.csv(paste("Group",groupyears[gy],"_scansamples_FULL_CLEANED.txt", sep = ""))
     meta_data = read.csv(paste("Group",groupyears[gy],"_GroupByYear.txt", sep = "")) #load meta data
     
@@ -109,17 +117,19 @@ for (gy in 1:length(groupyears)){ #for all group & years
     scans2018$isSocialGive = 0; scans2018$isSocialGive[which(scans2018$focal.activity.isPost=="G")]=1
     scans2018$isSocialGet = 0; scans2018$isSocialGet[which(scans2018$focal.activity.isPost=="E")]=1
     scans2018$isAgg=0; scans2018$isAgg[which(scans2018$focal.activity=="aggression" | scans2018$focal.activity=="submit")]=1
+    scans2018$isFeed=0; scans2018$isFeed[which(scans2018$focal.activity=="feed")]=1
     
     #Order columns
     col_order <- c("date","observation.name","focalID","group","year","scan.number","focal.activity","focal.activity.isPost","partner.ID","in.proximity","num.prox","isProx","isSocial","isSocialGive", "isSocialGet","isAgg", "Q","isPost","timeBlock")
     scans2018 <- scans2018[, col_order]
     prox_data =  scans2018[,c("focalID","in.proximity")]
+    names(prox_data)[1]="focal.monkey"
     
   }else{ #if not 2018 (i.e. regular focal data)
     ############################################################################ 
     
     #Load data
-    setwd('~/Documents/GitHub/Cayo-Maria-Disease-Modeling/Data/Data All Cleaned/BehavioralDataFiles')
+    setwd('~/Documents/GitHub/Cayo-Maria-Survival/Data/Data All Cleaned/BehavioralDataFiles')
     prox_data = read.csv(paste("Group",groupyears[gy],"_ProximityGroups.txt", sep = ""))
     meta_data = read.csv(paste("Group",groupyears[gy],"_GroupByYear.txt", sep = "")) #load meta data
     #cleaned_data = read.csv(paste("Group",groupyears[gy],"_CleanedData.txt", sep = ""))
@@ -156,9 +166,11 @@ for (gy in 1:length(groupyears)){ #for all group & years
     
   } #end of year clause (2018 vs. other)
   
+  
    #Format data with aggregate format
   # Output the Master Edgelist of all possible pairs given the unique IDs.
   unqIDs = meta_data$id#[meta_data$focalcutoff_met=="Y"]
+  #rscans=prox_data; masterEL=edgelist
   edgelist = calcMasterEL(unqIDs);
   df_obs_agg  = calcEdgeList(prox_data, edgelist); ##IMPORTANT NOTE: the structure of the proximity data is different for 
   #2018 relative to other years (the focal ID is not counted in proximity for 2018 but it is for other years)
@@ -167,7 +179,7 @@ for (gy in 1:length(groupyears)){ #for all group & years
   
   
   #Get observation effort for each dyad
-  if (years[gy]==2018){numscans = as.data.frame(table(prox_data$focalID))}else{ numscans = as.data.frame(table(prox_data$focal.monkey))}
+  numscans = as.data.frame(table(prox_data$focal.monkey))
   
   df_obs_agg$ID1_obseff_duration = meta_data$hrs.focalfollowed[match(df_obs_agg$ID1, meta_data$id)]
   df_obs_agg$ID1_obseff_samples = numscans$Freq[match(df_obs_agg$ID1, numscans$Var1)]
@@ -211,6 +223,9 @@ df_obs_agg$ID1 = factor(df_obs_agg$ID1, levels = unique_names); df_obs_agg$ID2 =
 df_obs_agg$ID1_id = as.integer(df_obs_agg$ID1); df_obs_agg$ID2_id = as.integer(df_obs_agg$ID2)
 df_obs_agg$dyad_id = factor(df_obs_agg$dyad_id, levels=df_obs_agg$dyad_id)
 
-setwd("~/Documents/GitHub/Cayo-Maria-Disease-Modeling/Data/R.Data/")
+setwd("~/Documents/GitHub/Cayo-Maria-Survival/Data/R.Data/")
 save(edgelist.all,file="proximity_data.RData")
+
+
+
 

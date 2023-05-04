@@ -1,3 +1,4 @@
+#bison_proximity_networks.R
 #Model proximity networks for Cayo data with bison
 #This will allow us to capture uncertainty in downstream simulations
 #C. Testard October 2022
