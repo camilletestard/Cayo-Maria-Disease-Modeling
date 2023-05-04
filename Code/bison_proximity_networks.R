@@ -17,14 +17,13 @@ load(paste0(data_path,"proximity_data.RData"))
 edgelist.all$groupyear = paste0(edgelist.all$group, edgelist.all$year)
 
 #Set group year list
-group = c("F","V","KK","V","F","F","KK","V","V","KK","S","V","F","V")
-years = c(2015,2015,2015,
-          2016,2016,2017,2017,2017,
-          2018, 2018,2019, 2019,2021,2021)
-groupyears = c("F2015","V2015","KK2015",
-               "V2016","F2016","F2017",
-               "KK2017","V2017","V2018","KK2018",
-               "S2019","V2019","F2021","V2021")
+group = c("F","KK","F","HH","F","V","R","KK","R","V","F","HH","F","KK","V","V","KK","S","V","F","V","TT","V")
+years = c(2013, 2013,2014,2014,2015,2015,2015,2015,
+          2016,2016,2016,2016,2017,2017,2017,
+          2018,2018, 2019, 2019,2021,2021,2022,2022)
+groupyears = c("F2013","KK2013","F2014","HH2014","F2015","V2015","R2015","KK2015",
+               "R2016","V2016","F2016","HH2016","F2017","KK2017","V2017",
+               "V2018","KK2018","S2019","V2019","F2021","V2021","TT2022","V2022")
 
 gy=1; posterior.el=list(); density_samples=list() #initalize edgelist posterior samples
 
