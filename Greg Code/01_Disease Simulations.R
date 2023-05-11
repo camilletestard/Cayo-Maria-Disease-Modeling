@@ -6,7 +6,8 @@ rm(list = ls())
 library(dplyr); library(igraph); library(foreach); library(doParallel); library(stringr); library(tidyverse)
 library(magrittr); library(fs)
 
-load("Data/R.Data/BisonFittedNetworks.RData")
+# load("Data/R.Data/BisonFittedNetworks.RData")
+load("Data/BisonFittedNetworks (2).RData")
 
 AggregatedEdges <- posterior.el %>% bind_rows(.id = "Rep")
 
@@ -35,14 +36,14 @@ for(FocalRep in Reps){
   print(FocalRep)
   
   RepData <- AggregatedEdges %>% filter(Rep == FocalRep)
-  
+
   r <- dir_ls("Greg Data/Outputs/BISoN/Random",
               regex = "Greg Data/Outputs/BISoN/Random/" %>%
                 paste0(FocalRep)) %>%
-    str_split("_") %>% 
-    map_chr(2) %>% 
+    str_split("_") %>%
+    map_chr(2) %>%
     as.numeric %>% max %>% add(1)
-  
+
   if(r < 1) r <- 1
   
   if(r < 1001){
@@ -55,7 +56,7 @@ for(FocalRep in Reps){
       
       print(r)
       
-      Network <- 
+      Network <- AdjMatrix <-
         RepData[,c("From", "To", paste0("draw.", r))] %>% 
         rename(Weight = 3) %>% 
         graph.data.frame(directed = F) %>% 
