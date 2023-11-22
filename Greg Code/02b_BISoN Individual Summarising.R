@@ -1,5 +1,5 @@
 
-# 02a_BISoN Annual Summarising ####
+# 02b_BISoN Individual Summarising ####
 
 library(tidyverse); library(ggregplot); library(ggforce); library(cowplot); library(fs)
 library(magrittr); library(colorspace); library(lme4); library(lmerTest); library(patchwork)
@@ -12,6 +12,107 @@ FileList <-
 
 names(FileList) <- "Greg Data/Outputs/BISoN/Random" %>%
   list.files
+
+IndivDFList <- 
+  FileList %>% str_split("/") %>% map_chr(last) %>% str_split("_") %>% 
+  map_chr(first) %>% unique %>% sort %>% 
+  map(function(Pop){
+    
+    print(Pop)
+    
+    FileList[str_detect(FileList, Pop)] %>% 
+      
+      map(function(a){
+        
+        print(a)
+        
+        b <- a %>% readRDS
+        
+        # b %>% arrange(ID)
+        
+        b %>% return
+        
+      }) %>% bind_rows(.id = "File") %>% mutate(Pop = Pop)
+    
+  })
+
+names(IndivDFList) <-
+  FileList %>% str_split("/") %>% map_chr(last) %>% str_split("_") %>% 
+  map_chr(first) %>% unique %>% sort
+
+IndivDF <- IndivDFList %>% bind_rows()
+
+IndivDF$File %<>% str_split("_") %>% map_chr(last) %>% str_remove(".rds")
+
+IndivDF %<>% rename(S_I = File) %>% 
+  mutate_at("S_I", as.numeric)
+
+IndivDF %<>% 
+  mutate(S_I_Category = cut(S_I, breaks = c(quantile(S_I, 0:3/3)), 
+                            labels = c("Low", "Med", "High"), 
+                            include.lowest = T))
+
+IndivDF %<>% 
+  group_by(ID, Pop, S_I_Category) %>% 
+  summarise(MeanInf = mean(Infected), 
+            MeanTime = mean(Time),
+            TimeSD = sd(Time),
+            TimeSE = TimeSD/(1000^0.5))
+
+# IndivDF %<>% 
+#   group_by(ID, Pop) %>% 
+#   summarise(MeanInf = mean(Infected), 
+#             MeanTime = mean(Time),
+#             TimeSD = sd(Time),
+#             TimeSE = TimeSD/(1000^0.5))
+
+# IDLevels <- IndivDF %>% arrange(MeanTime) %>% mutate_at("ID", ~paste0(.x, "_", Pop)) %>% pull(ID)
+
+# IndivDF %>% arrange(MeanTime) %>% mutate_at("ID", ~paste0(.x, "_", Pop)) %>% 
+#   mutate_at("ID", ~factor(.x, levels = IDLevels)) %>% 
+#   ggplot(aes(ID, MeanTime)) +
+#   geom_errorbar(aes(ymin = MeanTime - TimeSE, ymax = MeanTime + TimeSE, colour = Pop), 
+#                 position = position_dodge(w = 0.4)) +
+#   geom_point(aes(colour = Pop), 
+#              position = position_dodge(w = 0.4)) +
+#   theme(legend.position = "none")
+
+IndivDF %>% saveRDS("Greg Data/Outputs/IndividualTimesteps.rds")
+
+IndivDF %<>% 
+  mutate_at("Pop", ~str_replace(.x, "KK", "K")) %>% 
+  mutate_at("Pop", ~str_replace(.x, "HH", "H")) %>% 
+  mutate_at("Pop", ~str_replace(.x, "TT", "T"))
+
+IndivDF %<>% 
+  mutate(Year = substr(Pop, 2, 5) %>% as.numeric)
+
+Seeds <- IndivDFList %>% map(~.x %>% filter(Time == 0)) %>% 
+  bind_rows(.id = "Pop")
+
+Seeds %<>% 
+  mutate_at("Pop", ~str_replace(.x, "KK", "K")) %>% 
+  mutate_at("Pop", ~str_replace(.x, "HH", "H")) %>% 
+  mutate_at("Pop", ~str_replace(.x, "TT", "T"))
+
+Seeds %<>% 
+  mutate(Year = substr(Pop, 2, 5) %>% as.numeric) %>% 
+  mutate(Group = substr(Pop, 1, 1))
+
+Seeds %<>% 
+  mutate_at("File", ~str_remove(.x, ".rds")) %>% 
+  separate(File, sep = "_", into = c("Rep", "R", "P_I")) %>% 
+  mutate_at("P_I", as.numeric)
+
+Seeds %<>% 
+  mutate_at("R", as.numeric)
+
+load("Greg Data/IndividualTimesteps_IDinfo.Rdata")
+
+Seeds <- 
+  individual_timestep[,c("sex", "rank", "age", "year", "group", "ID")] %>% unique %>%
+  rename_all(CamelConvert) %>% 
+  left_join(Seeds, ., by = c("ID", "Year", "Group"))
 
 OutputList <- 
   
@@ -38,6 +139,11 @@ OutputDF %<>%
 
 OutputDF %<>% 
   mutate_at("R", as.numeric)
+
+OutputDF %<>% 
+  left_join(Seeds %>% 
+              dplyr::select(Pop, Sex, Rank, Age, R) %>% rename_all(~paste0("Seed.", .x)),
+            by = c("Rep" = "Seed.Pop", "R" = "Seed.R"))
 
 # Testing ####
 
@@ -120,9 +226,15 @@ TimeStepDF %<>%
 
 library(MCMCglmm)
 
-MCMC1 <- MCMCglmm(Mean ~ P_I + PostMaria, random =~Rep, data = TestDF)
+MCMC1 <- MCMCglmm(Mean ~ P_I + PostMaria + Seed.Rank + Seed.Sex + Seed.Age, random =~Rep, data = TestDF %>% na.omit)
+
+MCMC1 %>% summary
 
 MCMC1 %>% saveRDS("Model.rds")
+
+MCMC2 <- MCMCglmm(Mean ~ P_I + PostMaria*(Seed.Rank + Seed.Sex + Seed.Age), random =~Rep, data = TestDF %>% na.omit)
+
+MCMC2 %>% summary
 
 MCMC1 <- readRDS("Model.rds")
 
