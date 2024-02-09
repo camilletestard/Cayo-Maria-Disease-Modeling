@@ -10,7 +10,8 @@ library(igraph)
 
 #Load data
 setwd("~/Documents/GitHub/Cayo-Maria-Disease-Modeling/Data/R.Data/")
-individual_timestep = readRDS("IndividualTimesteps.rds")
+#individual_timestep = readRDS("IndividualTimesteps.rds")
+individual_timestep = readRDS("IndividualTimesteps_PInf.rds")
 individual_timestep$year = parse_number(individual_timestep$Pop)
 individual_timestep$group = substr(individual_timestep$Pop,1,1)
 individual_timestep$isPost = "pre"; individual_timestep$isPost[individual_timestep$year>2017] = "post"
@@ -48,9 +49,18 @@ individual_timestep$isPost=factor(individual_timestep$isPost, levels =c("pre","p
 
 #Run models
 setwd("~/Documents/GitHub/Cayo-Maria-Disease-Modeling/")
+
+individual_timestep_keepOriginal = individual_timestep; #individual_timestep= individual_timestep_keepOriginal
+individual_timestep = individual_timestep[individual_timestep$S_I_Category=="Med",]
+individual_timestep = individual_timestep[individual_timestep$age>5,]
+
 plot(density(individual_timestep$MeanTime))
-mdl<-lmer(MeanTime ~ isPost*age.scale + isPost*sex+ isPost*rank +(1|ID)+ (1|group), individual_timestep)
+qplot(individual_timestep$MeanTime)
+
+#mdl<-lmer(MeanTime ~ S_I_Category + isPost*age + isPost*sex+ isPost*rank +(1|ID)+ (1|group), individual_timestep)
+mdl<-lmer(MeanTime ~ isPost*age + isPost*sex+ isPost*rank +(1|ID)+ (1|group), individual_timestep)
 summary(mdl)
+performance::check_model(mdl)
 plot_model(mdl); ggsave("infection_individual_factors.pdf")
 tab_model(mdl); ggsave("infection_individual_factors_table.pdf")
 
@@ -58,9 +68,8 @@ tab_model(mdl); ggsave("infection_individual_factors_table.pdf")
 ggplot(individual_timestep, aes(x=MeanTime, color=isPost))+
   geom_density()
 
-ggplot(individual_timestep, aes(x=age, y=MeanTime))+
-  geom_jitter()+
-  geom_smooth(method = "lm")
+ggplot(individual_timestep, aes(x=age, color=isPost))+
+  geom_density()
 
 individual_timestep$year.factor = as.factor(individual_timestep$year)
 ggplot(individual_timestep, aes(x=year.factor, y=MeanTime))+
@@ -68,6 +77,9 @@ ggplot(individual_timestep, aes(x=year.factor, y=MeanTime))+
   theme_light()
   #geom_boxplot(width = 0.2)
 ggsave("MeanTimeToInfection_perYear.pdf")
+
+#Change in inter-individual differences pre-to-post hurricane
+setwd("~/Documents/GitHub/Cayo-Maria-Disease-Modeling/Results/")
 
 individual_timestep_L.Hrank = individual_timestep[individual_timestep$rank=="L"|individual_timestep$rank=="H",]
 individual_timestep_L.Hrank=individual_timestep_L.Hrank[!is.na(individual_timestep_L.Hrank$rank),]
@@ -77,6 +89,16 @@ ggplot(individual_timestep_L.Hrank, aes(x=rank, y=MeanTime))+
   facet_grid(~isPost)+
   theme_light()
 ggsave("Time2Infection_byRank_HurrStatus.pdf")
+post.L = mean(individual_timestep_L.Hrank$MeanTime[individual_timestep_L.Hrank$rank=="L" & individual_timestep_L.Hrank$isPost=="post"])
+pre.L=mean(individual_timestep_L.Hrank$MeanTime[individual_timestep_L.Hrank$rank=="L" & individual_timestep_L.Hrank$isPost=="pre"])
+post.H=mean(individual_timestep_L.Hrank$MeanTime[individual_timestep_L.Hrank$rank=="H" & individual_timestep_L.Hrank$isPost=="post"])
+pre.H=mean(individual_timestep_L.Hrank$MeanTime[individual_timestep_L.Hrank$rank=="H" & individual_timestep_L.Hrank$isPost=="pre"])
+
+t.test(individual_timestep_L.Hrank$MeanTime[individual_timestep_L.Hrank$rank=="L" & individual_timestep_L.Hrank$isPost=="pre"],
+       individual_timestep_L.Hrank$MeanTime[individual_timestep_L.Hrank$rank=="H" & individual_timestep_L.Hrank$isPost=="pre"])
+
+t.test(individual_timestep_L.Hrank$MeanTime[individual_timestep_L.Hrank$rank=="L" & individual_timestep_L.Hrank$isPost=="post"],
+       individual_timestep_L.Hrank$MeanTime[individual_timestep_L.Hrank$rank=="H" & individual_timestep_L.Hrank$isPost=="post"])
 
 ggplot(individual_timestep, aes(x=sex, y=MeanTime))+
   geom_violin()+
@@ -84,6 +106,17 @@ ggplot(individual_timestep, aes(x=sex, y=MeanTime))+
   facet_grid(~isPost)+
   theme_light()
 ggsave("Time2Infection_bySex_HurrStatus.pdf")
+post.M = mean(individual_timestep$MeanTime[individual_timestep$sex=="M" & individual_timestep$isPost=="post"])
+pre.M=mean(individual_timestep$MeanTime[individual_timestep$sex=="M" & individual_timestep$isPost=="pre"])
+post.F=mean(individual_timestep$MeanTime[individual_timestep$sex=="F" & individual_timestep$isPost=="post"])
+pre.F=mean(individual_timestep$MeanTime[individual_timestep$sex=="F" & individual_timestep$isPost=="pre"])
+
+t.test(individual_timestep$MeanTime[individual_timestep$sex=="M" & individual_timestep$isPost=="pre"], 
+       individual_timestep$MeanTime[individual_timestep$sex=="F" & individual_timestep$isPost=="pre"])
+
+t.test(individual_timestep$MeanTime[individual_timestep$sex=="M" & individual_timestep$isPost=="post"], 
+       individual_timestep$MeanTime[individual_timestep$sex=="F" & individual_timestep$isPost=="post"])
+
 
 ggplot(individual_timestep, aes(x=age, y=MeanTime))+
   geom_jitter(alpha=0.3)+
@@ -91,6 +124,10 @@ ggplot(individual_timestep, aes(x=age, y=MeanTime))+
   facet_grid(~isPost)+
   theme_light()
 ggsave("Time2Infection_byAge_HurrStatus.pdf")
+
+cor.test(individual_timestep$age[individual_timestep$isPost=="pre"], individual_timestep$MeanTime[individual_timestep$isPost=="pre"])
+cor.test(individual_timestep$age[individual_timestep$isPost=="post"], individual_timestep$MeanTime[individual_timestep$isPost=="post"])
+
 
 ggplot(individual_timestep, aes(x=sex, y=MeanTime))+
   geom_violin()+

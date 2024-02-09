@@ -23,6 +23,7 @@ colnames(obs_dens)<-c("density")
 
 #create groupyear combination variable
 edgelist.all$groupyear<-paste(edgelist.all$group, edgelist.all$year, sep="")
+
 #calculate observed network densities
 for (g in unique(edgelist.all$groupyear)){
   z<-subset(edgelist.all, groupyear==g, select = c("ID1", "ID2", "count"))

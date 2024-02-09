@@ -186,6 +186,7 @@ for (gy in 1:length(groupyears)){ #for all group & years
   df_obs_agg$ID2_obseff_samples = numscans$Freq[match(df_obs_agg$ID2, numscans$Var1)]
   df_obs_agg$total_obs_time = df_obs_agg$ID1_obseff_duration  + df_obs_agg$ID2_obseff_duration 
   df_obs_agg$total_samples = df_obs_agg$ID1_obseff_samples + df_obs_agg$ID2_obseff_samples
+  df_obs_agg$weight = df_obs_agg$count/df_obs_agg$total_samples
   
   ## Add id qualifiers
   #sex
@@ -225,6 +226,6 @@ df_obs_agg$dyad_id = factor(df_obs_agg$dyad_id, levels=df_obs_agg$dyad_id)
 setwd("~/Documents/GitHub/Cayo-Maria-Disease-Modeling/Data/R.Data/")
 save(edgelist.all,file="proximity_data.RData")
 
-
+load("proximity_data.RData")
 
 
