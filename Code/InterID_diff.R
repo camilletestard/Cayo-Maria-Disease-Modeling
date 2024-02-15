@@ -7,18 +7,20 @@ library(readr)
 library(sjmisc)
 library(sjPlot)
 library(igraph)
+library(emmeans)
 
 #####################
 #Load and format data
 #####################
 
-setwd("~/Documents/GitHub/Cayo-Maria-Disease-Modeling/Data/R.Data/")
+setwd("/Users/alba/Desktop/Postdoc_UNIL/Hurricane_project/Cayo-Maria-Disease-Modeling/Data/R.Data/")
 individual_timestep = readRDS("IndividualTimesteps.rds")
 #individual_timestep = readRDS("IndividualTimesteps_PInf.rds")
 individual_timestep$year = parse_number(individual_timestep$Pop)
 individual_timestep$group = substr(individual_timestep$Pop,1,1)
-individual_timestep$isPost = "pre"; individual_timestep$isPost[individual_timestep$year>2017] = "post"
-individual_timestep$age = scale(individual_timestep$age)
+individual_timestep$isPost = "pre"; 
+individual_timestep$isPost[individual_timestep$year>2017] = "post"
+#individual_timestep$age = scale(individual_timestep$age)
 
 load("proximity_data.RData")
 edgelist.all$weight = edgelist.all$count/edgelist.all$total_samples
@@ -65,10 +67,23 @@ qplot(individual_timestep$MeanTime)
 # Run linear models
 #mdl<-lmer(MeanTime ~ S_I_Category + isPost*age + isPost*sex+ isPost*rank +(1|ID)+ (1|group), individual_timestep)
 mdl<-lmer(MeanTime ~ isPost*age + isPost*sex+ isPost*rank +(1|ID)+ (1|group), individual_timestep)
-summary(mdl)
-performance::check_model(mdl)
+#only consider cases where rank is known
+individual_timestep_nona<-individual_timestep[complete.cases(individual_timestep$rank), ] 
+mdl2<-lmer(MeanTime ~ isPost*age.scale + isPost*sex+ isPost*rank +(1|group/ID), individual_timestep_nona)
+mdl2_null<-lmer(MeanTime ~ 1 +(1|group/ID), individual_timestep_nona)
+#full-null model comparison to evaluate overall effect of predictors and avoid cryptic multiple testing
+anova(mdl2_null, mdl2, test="Chisq")
+drop1(mdl2, test="Chisq")#interaction between rank and hurricane significant
+
+summary(mdl2)
+#model performance
+performance::check_model(mdl2)
 plot_model(mdl); ggsave("infection_individual_factors.pdf")
 tab_model(mdl); ggsave("infection_individual_factors_table.pdf")
+
+#pairwise comparisons
+xx<-as.data.frame(summary(emmeans(mdl2, pairwise ~ isPost*rank))$contrasts)
+write.csv(xx, file="/Users/alba/Desktop/Postdoc_UNIL/Hurricane_project/Cayo-Maria-Disease-Modeling/Results/contrasts_hurricaneRank.csv")
 
 #################################
 ## Plot data for visualization ##
