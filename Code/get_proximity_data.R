@@ -195,6 +195,8 @@ for (gy in 1:length(groupyears)){ #for all group & years
   #rank
   df_obs_agg$ID1_rank = meta_data$ordinal.rank[match(df_obs_agg$ID1, meta_data$id)]
   df_obs_agg$ID2_rank = meta_data$ordinal.rank[match(df_obs_agg$ID2, meta_data$id)]
+  df_obs_agg$ID1_PercRank = meta_data$percofsex.dominanted[match(df_obs_agg$ID1, meta_data$id)]
+  df_obs_agg$ID2_PercRank = meta_data$percofsex.dominanted[match(df_obs_agg$ID2, meta_data$id)]
   #age
   df_obs_agg$ID1_age = meta_data$age[match(df_obs_agg$ID1, meta_data$id)]
   df_obs_agg$ID2_age = meta_data$age[match(df_obs_agg$ID2, meta_data$id)]

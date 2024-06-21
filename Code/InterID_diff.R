@@ -41,6 +41,12 @@ individual_timestep$rank2 =  edgelist.all$ID2_rank[match(individual_timestep$id.
 individual_timestep$rank[is.na(individual_timestep$rank)] = individual_timestep$rank2[is.na(individual_timestep$rank)]
 individual_timestep$rank2=NULL
 
+#Add continuous rank
+individual_timestep$PercRank = edgelist.all$ID1_PercRank[match(individual_timestep$id.groupyear, edgelist.all$id1.groupyear)]
+individual_timestep$PercRank2 =  edgelist.all$ID2_PercRank[match(individual_timestep$id.groupyear, edgelist.all$id2.groupyear)]
+individual_timestep$PercRank[is.na(individual_timestep$PercRank)] = individual_timestep$PercRank2[is.na(individual_timestep$PercRank)]
+individual_timestep$PercRank2=NULL
+
 #Add age
 individual_timestep$age = edgelist.all$ID1_age[match(individual_timestep$id.groupyear, edgelist.all$id1.groupyear)]
 individual_timestep$age2 =  edgelist.all$ID2_age[match(individual_timestep$id.groupyear, edgelist.all$id2.groupyear)]
@@ -73,6 +79,11 @@ summary(mdl)
 individual_timestep_nona<-individual_timestep[complete.cases(individual_timestep$rank), ] 
 mdl2<-lmer(MeanTime ~ isPost*age.scale + isPost*sex+ isPost*rank +(1|group/ID), individual_timestep_nona)
 mdl2_null<-lmer(MeanTime ~ 1 +(1|group/ID), individual_timestep_nona)
+
+#only consider cases where rank is known & rank is continuous
+individual_timestep_nona<-individual_timestep[complete.cases(individual_timestep$PercRank), ] 
+mdl3<-lmer(MeanTime ~ isPost*age.scale + isPost*sex+ isPost*PercRank +(1|group/ID), individual_timestep_nona)
+mdl3_null<-lmer(MeanTime ~ 1 +(1|group/ID), individual_timestep_nona)
 
 #full-null model comparison to evaluate overall effect of predictors and avoid cryptic multiple testing
 anova(mdl2_null, mdl2, test="Chisq")
