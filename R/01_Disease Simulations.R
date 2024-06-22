@@ -6,10 +6,7 @@ rm(list = ls())
 library(dplyr); library(igraph); library(foreach); library(doParallel); library(stringr); library(tidyverse)
 library(magrittr); library(fs)
 
-# load("Data/R.Data/BisonFittedNetworks.RData")
-# load("Data/BisonFittedNetworks (2).RData")
-
-load("Data/R.Data/BisonFittedNetworks.RData")
+load("Data/Intermediate/BisonFittedNetworks.RData")
 
 AggregatedEdges <- posterior.el %>% bind_rows(.id = "Rep")
 
@@ -22,13 +19,14 @@ AggregatedEdges %<>%
 
 Reps <- AggregatedEdges$Rep %>% unique %>% sort
 
-dir_create("Greg Data/Outputs/BISoN/Random")
+dir_create("Data/Outputs/BISoN")
 
 reps = 1000 # number of times the simulation should be repeated
 
 sims = 10000 # number of time steps/times each dyad should be allowed to potentially interact
 
 MeanInf <- 0.15
+
 InfSD <- 0.04
 
 FocalRep <- Reps[1]
@@ -39,8 +37,8 @@ for(FocalRep in Reps){
   
   RepData <- AggregatedEdges %>% filter(Rep == FocalRep)
 
-  r <- dir_ls("Greg Data/Outputs/BISoN/Random",
-              regex = "Greg Data/Outputs/BISoN/Random/" %>%
+  r <- dir_ls("Data/Outputs/BISoN",
+              regex = "Data/Outputs/BISoN/" %>%
                 paste0(FocalRep)) %>%
     str_split("_") %>%
     map_chr(2) %>%
@@ -96,7 +94,8 @@ for(FocalRep in Reps){
           TransmissionMatrix[I2,] <- 
             
             rbinom(length(Network[I2,]), 1, Network[I2,])* # Identifying if they interact
-            rbinom(length(Network[I2,]), 1, P_I) # Identifying if they infect
+            
+            rbinom(length(Network[I2,]), 1, P_I) # Identifying if it transmits
           
           Infected <- which(colSums(TransmissionMatrix) > 0)# %>% as.numeric()
           
@@ -116,7 +115,7 @@ for(FocalRep in Reps){
         
       }
       
-      saveRDS(Indivs, file = paste0("Greg Data/Outputs/BISoN/Random/",FocalRep, "_", 
+      saveRDS(Indivs, file = paste0("Data/Outputs/BISoN/",FocalRep, "_", 
                                     
                                     str_pad(r, width = 4, side = "left", pad = "0"), 
                                     

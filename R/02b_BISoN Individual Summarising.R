@@ -7,10 +7,10 @@ library(magrittr); library(colorspace); library(lme4); library(lmerTest); librar
 theme_set(theme_cowplot())
 
 FileList <- 
-  "Greg Data/Outputs/BISoN/Random" %>% 
+  "Data/Outputs/BISoN" %>% 
   dir_ls()
 
-names(FileList) <- "Greg Data/Outputs/BISoN/Random" %>%
+names(FileList) <- "Data/Outputs/BISoN" %>%
   list.files
 
 IndivDFList <- 
@@ -77,7 +77,7 @@ IndivDF %<>%
 #              position = position_dodge(w = 0.4)) +
 #   theme(legend.position = "none")
 
-IndivDF %>% saveRDS("Greg Data/Outputs/IndividualTimesteps.rds")
+IndivDF %>% saveRDS("Data/Outputs/IndividualTimesteps.rds")
 
 IndivDF %<>% 
   mutate_at("Pop", ~str_replace(.x, "KK", "K")) %>% 
@@ -107,7 +107,7 @@ Seeds %<>%
 Seeds %<>% 
   mutate_at("R", as.numeric)
 
-load("Greg Data/IndividualTimesteps_IDinfo.Rdata")
+load("Data/Input/IndividualTimesteps_IDinfo.Rdata")
 
 Seeds <- 
   individual_timestep[,c("sex", "rank", "age", "year", "group", "ID")] %>% unique %>%

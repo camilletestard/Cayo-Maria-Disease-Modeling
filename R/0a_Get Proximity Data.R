@@ -23,7 +23,7 @@
   #Load functions
   # setwd("~/Documents/GitHub/Cayo-Maria-Disease-Modeling/")
   
-  source("Code/Functions/functions_GlobalNetworkMetrics.R")
+  source("R/Functions/functions_GlobalNetworkMetrics.R")
   
   # group = c("F","V","KK","V","F","F","KK","V","V","KK","S","V","F","V")
   # years = c(2015,2015,2015,

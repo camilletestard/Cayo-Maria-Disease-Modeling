@@ -10,12 +10,11 @@
   library(bisonR)
   library(dplyr)
   library(ggplot2)
+  library(fs)
   
-  data_path = "Data/R.Data/" #Load data
+  dir_create("Intermediate")
   
-  # load(paste0(data_path,"proximity_data.RData"))
-  
-  edgelist.all <- readRDS(paste0(data_path,"proximity_data.rds"))
+  edgelist.all <- readRDS("Intermediate/proximity_data.rds")
   
   edgelist.all$groupyear = paste0(edgelist.all$group, edgelist.all$year)
   
@@ -91,5 +90,5 @@ for (gy in 1:length(groupyears)){ #for all groups and years
 # setwd("~/Documents/GitHub/Cayo-Maria-Disease-Modeling/Data/R.Data/")
 
 save(posterior.el, density_samples, groupyears, 
-     file = "Data/R.Data/BisonFittedNetworks.RData")
+     file = "Data/Intermediate/BisonFittedNetworks.RData")
 
