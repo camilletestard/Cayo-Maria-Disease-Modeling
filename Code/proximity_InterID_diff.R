@@ -1,7 +1,7 @@
-#proximity_LongTermChange.R
+#proximity_InterID_diff.R
 
 #Model proximity network with bison - get a distribution of possible networks from the observed data
-#Regression from imputed dataset to test the change in proximity over time
+#Regression from imputed dataset to test the change in proximity over time according to age, sex and rank categories
 #C. Testard February 2024
 
 #Load libraries
