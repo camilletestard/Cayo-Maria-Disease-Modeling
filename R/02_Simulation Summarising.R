@@ -7,10 +7,10 @@ library(magrittr); library(colorspace); library(lme4); library(lmerTest); librar
 theme_set(theme_cowplot())
 
 FileList <- 
-  "Greg Data/Outputs/BISoN/Random" %>% 
+  "Data/Outputs/BISoN" %>% 
   dir_ls()
 
-names(FileList) <- "Greg Data/Outputs/BISoN/Random" %>%
+names(FileList) <- "Data/Outputs/BISoN" %>%
   list.files
 
 OutputList <- 
@@ -38,6 +38,8 @@ OutputDF %<>%
 
 OutputDF %<>% 
   mutate_at("R", as.numeric)
+
+OutputDF %>% saveRDS("Data/Output/PopulationTimes.rds")
 
 # Testing ####
 
@@ -92,6 +94,8 @@ TimeStepDF %<>%
          Year = substr(Rep, 2, 5)) %>%   
   
   mutate(PostMaria = as.factor(as.numeric(Year %in% c(2018:2021))))
+
+OutputDF %>% saveRDS("Data/Output/PopulationTimeSteps.rds")
 
 (TimeFigure <- 
     TimeStepDF %>%
