@@ -7,7 +7,9 @@ library(dplyr); library(igraph); library(foreach); library(doParallel); library(
 library(magrittr); library(fs)
 
 # load("Data/R.Data/BisonFittedNetworks.RData")
-load("Data/BisonFittedNetworks (2).RData")
+# load("Data/BisonFittedNetworks (2).RData")
+
+load("Data/R.Data/BisonFittedNetworks.RData")
 
 AggregatedEdges <- posterior.el %>% bind_rows(.id = "Rep")
 
