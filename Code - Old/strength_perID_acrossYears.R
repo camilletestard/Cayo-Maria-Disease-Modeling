@@ -1,5 +1,6 @@
 
 # X_Repeatability.R ####
+setwd("~/Documents/GitHub/Cayo-Maria-Disease-Modeling/")
 
 rm(list = ls())
 
@@ -7,10 +8,9 @@ library(dplyr); library(igraph); library(foreach); library(doParallel); library(
 library(magrittr); library(fs)
 
 # load("Data/R.Data/BisonFittedNetworks.RData")
-# load("Data/BisonFittedNetworks (2).RData")
-load("Greg Data/proximity_data.RData")
+load("Data/BisonFittedNetworks (2).RData")
 
-AggregatedEdges <- edgelist.all %>% bind_rows(.id = "Rep")
+AggregatedEdges <- posterior.el %>% bind_rows(.id = "Rep")
 
 AggregatedEdges %<>% rename(From = 2, To = 3)
 
@@ -19,7 +19,7 @@ AggregatedEdges %<>%
   mutate(Group = substr(Rep, 1, 1), 
          Year = substr(Rep, str_count(Rep) - 3, str_count(Rep)))
 
-Reps <- AggregatedEdges$Rep %>% unique %>% sort
+Reps <- AggregatedEdges$Rep %>% unique %>% sort #for each group year combination
 
 dir_create("Greg Data/Outputs/Repeatability")
 
@@ -27,13 +27,14 @@ reps = 1000 # number of times the simulation should be repeated
 
 sims = 10000 # number of time steps/times each dyad should be allowed to potentially interact
 
-MeanInf <- 0.15
-InfSD <- 0.04
+# MeanInf <- 0.15
+# InfSD <- 0.04
 
 FocalRep <- Reps[1]
 
 StrengthList <- list()
 
+#Extract strength
 for(FocalRep in Reps){
   
   print(FocalRep)
@@ -71,6 +72,7 @@ StrengthList %>% bind_rows %>% #(.id = "Rep") %>%
   rowSums -> 
   StrengthSums
 
+#Assign IDs
 StrengthList2 <- 
   Reps %>% 
   map(function(FocalRep){
@@ -98,6 +100,12 @@ names(StrengthList2) <- Reps
 
 StrengthList2 %>% bind_rows(.id = "Rep") -> IDDF
 
+StrengthList[[FocalRep]]
+StrengthList2[[FocalRep]]
+
+
+
+####################################################################
 IDDF$Strength <- StrengthSums
 
 IDDF %<>% 
@@ -108,11 +116,9 @@ IDDF %<>%
          Year = substr(Rep, 2, 5))
 
 IDDF %<>%
-  mutate(PostMaria = as.factor(as.numeric(Year %in% c(2018:2021))))
+  mutate(PostMaria = as.factor(as.numeric(Year %in% c(2018:2022))))
 
 IDDF %<>% mutate_at("Year", as.numeric)
-
-IDDF %>% saveRDS("Greg Data/Outputs/RepeatabilityDF.rds")
 
 library(lme4); library(lmerTest)
 
@@ -128,9 +134,9 @@ Rpt %>% summary
 
 Rpt
 
-Rpt2 <- rpt(Strength ~ (1|ID) + Year + Population + , data = IDDF, 
-            grname = "ID",
-            datatype = "Gaussian")
+Rpt2 <- rpt(Strength ~ (1|ID) + Year + Population + PostMaria, data = IDDF, 
+           grname = "ID",
+           datatype = "Gaussian")
 
 Rpt %>% summary
 
@@ -178,61 +184,21 @@ list(MC1, MC2, MC3a, MC3b) %>% map(MCMCRep) %>%
   # mutate_at(3:5, ~round(as.numeric(.x), 2))
   mutate_at(3:5, ~as.numeric(.x)) %>% 
   ggplot(aes(factor(Model), Mode, 
-             fill = Component)) + 
+                         fill = Component)) + 
   geom_col(colour = "black", position = "stack") + 
   labs(x = "Model") + 
   theme(axis.text.x = element_text(angle = 45, 
                                    hjust = 1)) +
   scale_x_discrete(labels = c("Overall", "ID:Hurricane Interaction", "Before", "After"))
 
-(FocalID <- IDDF$ID %>% unique %>% extract2(2))
 
-(FocalID2 <- IDDF$ID %>% unique %>% extract(c(210, 219)))
 
-OverlapDF <- 
-  IDDF %>% group_by(ID) %>% summarise(MinYear = min(Year), MaxYear = max(Year)) %>% 
-  filter(MinYear < 2020, MaxYear > 2020)
-
-(FocalID2 <- c("8K1", "00V"))
-(FocalID2 <- c("8K1", OverlapDF[10, ]$ID))
-
-(FocalID2 <- c("8K1", OverlapDF[14, ]$ID))
-
-(FocalID2 <- c("8K1", OverlapDF[15, ]$ID))
-
-(FocalID2 <- c("8K1", OverlapDF[16, ]$ID))
-
-MaintainedLines <- 
-  IDDF %>% mutate_at("Year", as.numeric) %>% 
+IDDF %>% mutate_at("Year", as.numeric) %>% 
   ggplot(aes(Year, Strength)) +
-  geom_line(aes(colour = as.factor(!ID %in% FocalID2),
-                alpha = as.factor(ID %in% FocalID2),
-                group = ID)) +
+  geom_line(aes(colour = ID)) +
   geom_point() +
   scale_y_log10() + 
-  theme(legend.position = "none") +
-  scale_alpha_manual(values = c(0.01, 1), name = paste(FocalID2, collapse = ", ")) +
-  scale_colour_manual(values = c("red", "black"), name = paste(FocalID2, collapse = ", "))
+  theme(legend.position = "none")
 
-(BrokenFocalID2 <- c("8K1", OverlapDF[17, ]$ID))
-
-BrokenLines <-
-  IDDF %>% mutate_at("Year", as.numeric) %>% 
-  ggplot(aes(Year, Strength)) +
-  geom_line(aes(colour = as.factor(!ID %in% BrokenFocalID2),
-                alpha = as.factor(ID %in% BrokenFocalID2),
-                group = ID)) +
-  geom_point() +
-  scale_y_log10() + 
-  theme(legend.position = "none") +
-  scale_alpha_manual(values = c(0.01, 1), name = paste(FocalID2, collapse = ", ")) +
-  scale_colour_manual(values = c("red", "black"), name = paste(FocalID2, collapse = ", "))
-
-library(patchwork)
-
-MaintainedLines/BrokenLines
-
-ggsave("Maintained_vs_Broken.jpeg", units = "mm", height = 180, width = 180)
-
-# IDDF %>% 
-#   pivot_wider(Strength, names_from = "Year", id_cols = "ID")
+IDDF %>% 
+  pivot_wider(Strength, names_from = "Year", id_cols = "ID")
