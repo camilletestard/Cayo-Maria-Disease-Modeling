@@ -1,4 +1,8 @@
 
+# 03_Individual Differences.r ####
+
+# Initially written by Camille, rewritten and pipelined by Greg
+
 #Load library
 library(lmerTest)
 library(lme4)
@@ -19,8 +23,9 @@ dir_create("Results")
 
 # setwd("~/Documents/Github/Cayo-Maria-Disease-Modeling/Data/R.Data/")
 
-individual_timestep = readRDS("Data/R.Data/IndividualTimesteps.rds")
+individual_timestep = readRDS("Data/Outputs/IndividualTimesteps.rds")
 #individual_timestep = readRDS("IndividualTimesteps_PInf.rds")
+
 individual_timestep$year = parse_number(individual_timestep$Pop)
 individual_timestep$group = substr(individual_timestep$Pop,1,1)
 individual_timestep$isPost = "pre"; 
@@ -63,21 +68,25 @@ individual_timestep$age.scale = scale(individual_timestep$age)
 individual_timestep$isPost=factor(individual_timestep$isPost, levels =c("pre","post"))
 #individual_timestep$rank=factor(individual_timestep$rank, levels =c("M","L","H"))
 
+individual_timestep %>% saveRDS("Outputs/IndividualTimestepsCamille.rds")
+
 ###########
 #Run models
 ###########
+
 # setwd("~/Documents/GitHub/Cayo-Maria-Disease-Modeling/")
 
 setwd(here::here())
 
 individual_timestep_keepOriginal = individual_timestep; #Keep original data frame #individual_timestep= individual_timestep_keepOriginal
 #individual_timestep = individual_timestep[individual_timestep$S_I_Category=="Med",] #if load data with multiple pInfection than select Medium
+
 individual_timestep = individual_timestep[individual_timestep$age>5,] #Remove individuals <6 yo
 
 plot(density(individual_timestep$MeanTime))
 qplot(individual_timestep$MeanTime)
 
-# Run linear models
+# Run linear models ####
 #mdl<-lmer(MeanTime ~ S_I_Category + isPost*age + isPost*sex+ isPost*rank +(1|ID)+ (1|group), individual_timestep)
 mdl<-lmer(MeanTime ~ isPost*age.scale + isPost*sex+ isPost*rank +(1|ID)+ (1|group), individual_timestep)
 summary(mdl)
@@ -133,13 +142,16 @@ ggsave("Figures/MeanTimeToInfection_perYear.pdf")
 #Rank
 #For visualization only consider individuals who are High and Low ranking (remove Med)
 #individual_timestep_L.Hrank = individual_timestep[individual_timestep$rank=="L"|individual_timestep$rank=="H",]
+
 individual_timestep_Allrank=individual_timestep[!is.na(individual_timestep$rank),]
 individual_timestep_Allrank$rank = factor(individual_timestep_Allrank$rank, levels = c("L","M","H"))
+
 ggplot(individual_timestep_Allrank, aes(x=rank, y=MeanTime))+
   geom_violin()+
   geom_boxplot(width=0.2)+
   facet_grid(~isPost)+
   theme_light()+ ylim(0, 900)
+
 ggsave("Results/Time2Infection_byRank_HurrStatus_LMH.pdf")
 
 post.L = mean(individual_timestep_Allrank$MeanTime[individual_timestep_Allrank$rank=="L" & individual_timestep_Allrank$isPost=="post"])
@@ -167,9 +179,10 @@ post.F=mean(individual_timestep$MeanTime[individual_timestep$sex=="F" & individu
 pre.F=mean(individual_timestep$MeanTime[individual_timestep$sex=="F" & individual_timestep$isPost=="pre"])
 
 #For age
-ggplot(individual_timestep, aes(x=age, y=MeanTime))+
-  geom_jitter(alpha=0.3)+
-  geom_smooth(method="lm")+
+
+ggplot(individual_timestep, aes(x = age, y = MeanTime)) +
+  geom_jitter(alpha = 0.3)+
+  geom_smooth(method = "lm")+
   facet_grid(~isPost)+
   theme_light()
 

@@ -8,7 +8,8 @@ library(magrittr); library(fs)
 
 # load("Data/R.Data/BisonFittedNetworks.RData")
 # load("Data/BisonFittedNetworks (2).RData")
-load("Greg Data/proximity_data.RData")
+
+load("Data/Intermediate/proximity_data.RData")
 
 AggregatedEdges <- edgelist.all %>% #
   # bind_rows(.id = "Rep")
@@ -27,7 +28,7 @@ AggregatedEdges %<>%
 
 Reps <- AggregatedEdges$Rep %>% unique %>% sort
 
-dir_create("Greg Data/Outputs/Repeatability_Observed")
+dir_create("Data/Outputs/Repeatability_Observed")
 
 reps = 1000 # number of times the simulation should be repeated
 
