@@ -1,5 +1,5 @@
 
-# X_Repeatability.R ####
+# X_Repeatability_Observed.R ####
 
 rm(list = ls())
 
@@ -8,11 +8,18 @@ library(magrittr); library(fs)
 
 # load("Data/R.Data/BisonFittedNetworks.RData")
 # load("Data/BisonFittedNetworks (2).RData")
-load("Greg Data/proximity_data.RData")
 
-AggregatedEdges <- edgelist.all %>% bind_rows(.id = "Rep")
+load("Data/Intermediate/proximity_data.RData")
 
-AggregatedEdges %<>% rename(From = 2, To = 3)
+AggregatedEdges <- edgelist.all %>% #
+  # bind_rows(.id = "Rep")
+  mutate_at("group", ~substr(.x, 1, 1)) %>% 
+  rename(Pop = group, Year = year) %>% 
+  mutate(Rep = paste0(Pop, Year))
+
+AggregatedEdges %<>% rename(From = 1, To = 2)
+
+AggregatedEdges %<>% mutate(Weight = count/total_samples)
 
 AggregatedEdges %<>% 
   mutate_at("Rep", str_trim) %>% 
@@ -21,7 +28,7 @@ AggregatedEdges %<>%
 
 Reps <- AggregatedEdges$Rep %>% unique %>% sort
 
-dir_create("Greg Data/Outputs/Repeatability")
+dir_create("Data/Outputs/Repeatability_Observed")
 
 reps = 1000 # number of times the simulation should be repeated
 
@@ -40,70 +47,28 @@ for(FocalRep in Reps){
   
   RepData <- AggregatedEdges %>% filter(Rep == FocalRep)
   
-  r <- 1
+  Network <- 
+    AdjMatrix <-
+    RepData[,c("From", "To", "Weight")] %>% 
+    arrange(From, To) %>% 
+    graph.data.frame(directed = F) %>% 
+    get.adjacency(sparse = FALSE, attr = 'Weight')
   
-  StrengthDF <- 
-    1:1000 %>% map(function(r){
-      
-      Network <- 
-        AdjMatrix <-
-        RepData[,c("From", "To", paste0("draw.", r))] %>% 
-        arrange(From, To) %>% 
-        rename(Weight = 3) %>% 
-        graph.data.frame(directed = F) %>% 
-        get.adjacency(sparse = FALSE, attr = 'Weight')
-      
-      # DF1 <- 
-      Network %>% rowSums# %>% data.frame %>% 
-      # rownames_to_column %>% 
-      # rename(ID = 1, Strength = 2)
-      
-    }) %>% bind_cols()
+  StrengthDF <-
+    Network %>% rowSums %>% data.frame %>% 
+    rownames_to_column %>%
+    rename(ID = 1, Strength = 2)
   
-  colnames(StrengthDF) <- paste0("draw.", 1:1000)
+  # }) %>% bind_cols()
+  
+  # colnames(StrengthDF) <- paste0("draw.", 1:1000)
   
   StrengthList[[FocalRep]] <- StrengthDF
   
 }
 
-StrengthList %>% bind_rows %>% #(.id = "Rep") %>% 
-  # dplyr::select(2:1001)
-  rowSums -> 
-  StrengthSums
-
-StrengthList2 <- 
-  Reps %>% 
-  map(function(FocalRep){
-    
-    print(FocalRep)
-    
-    RepData <- AggregatedEdges %>% filter(Rep == FocalRep)
-    
-    Network <- 
-      AdjMatrix <-
-      RepData[,c("From", "To", paste0("draw.", r))] %>% 
-      arrange(From, To) %>% 
-      rename(Weight = 3) %>% 
-      graph.data.frame(directed = F) %>% 
-      get.adjacency(sparse = FALSE, attr = 'Weight')
-    
-    # DF1 <- 
-    Network %>% rownames %>% data.frame(ID = .)# %>% 
-    # rownames_to_column %>% 
-    # rename(ID = 1, Strength = 2)
-    
-  })
-
-names(StrengthList2) <- Reps
-
-StrengthList2 %>% bind_rows(.id = "Rep") -> IDDF
-
-IDDF$Strength <- StrengthSums
-
-IDDF %<>% 
-  mutate_at("Rep", ~str_replace(.x, "KK", "K")) %>% 
-  mutate_at("Rep", ~str_replace(.x, "HH", "H")) %>% 
-  mutate_at("Rep", ~str_replace(.x, "TT", "T")) %>% 
+IDDF <- 
+  StrengthList %>% bind_rows(.id = "Rep") %>% 
   mutate(Population = substr(Rep, 1, 1), 
          Year = substr(Rep, 2, 5))
 
@@ -112,7 +77,7 @@ IDDF %<>%
 
 IDDF %<>% mutate_at("Year", as.numeric)
 
-IDDF %>% saveRDS("Greg Data/Outputs/RepeatabilityDF.rds")
+IDDF %>% saveRDS("Greg Data/Outputs/Repeatability_ObservedDF.rds")
 
 library(lme4); library(lmerTest)
 
@@ -167,7 +132,11 @@ MC3b <- MCMCglmm(Strength ~ Year + Population, # + PostMaria,
                  data = IDDF %>% filter(PostMaria == 1), 
                  random =~ ID)
 
-list(MC1, MC2, MC3a, MC3b) %>% map(MCMCRep)
+list(MC1, MC2, MC3a, MC3b) %>% map(MCMCRep) %>% bind_rows(.id = "Model") %>% 
+  mutate_at(3:5, ~round(as.numeric(.x), 3)) %>% 
+  mutate_at("Model", ~c("ID Overall", "ID:Hurricane", "ID Before", "ID After")[as.numeric(.x)]) %>% 
+  rename(Lower = lHPD, Upper = uHPD) %>% 
+  write.csv("RepeatabilityValues.csv", row.names = F)
 
 library(cowplot)
 
@@ -183,7 +152,11 @@ list(MC1, MC2, MC3a, MC3b) %>% map(MCMCRep) %>%
   labs(x = "Model") + 
   theme(axis.text.x = element_text(angle = 45, 
                                    hjust = 1)) +
-  scale_x_discrete(labels = c("Overall", "ID:Hurricane Interaction", "Before", "After"))
+  lims(y = c(NA, 1)) +
+  geom_hline(yintercept = 1, lty = 2, alpha = 0.4) +
+  scale_x_discrete(labels = c("Overall", "ID:Hurricane", "ID Before", "ID After"))
+
+ggsave("Figures/Repeatability.jpeg", units = "mm", height = 120, width = 150)
 
 (FocalID <- IDDF$ID %>% unique %>% extract2(2))
 
@@ -204,7 +177,7 @@ OverlapDF <-
 
 MaintainedLines <- 
   IDDF %>% mutate_at("Year", as.numeric) %>% 
-  ggplot(aes(Year, Strength)) +
+  ggplot(aes(Year, Strength+0.001)) +
   geom_line(aes(colour = as.factor(!ID %in% FocalID2),
                 alpha = as.factor(ID %in% FocalID2),
                 group = ID)) +
@@ -218,7 +191,7 @@ MaintainedLines <-
 
 BrokenLines <-
   IDDF %>% mutate_at("Year", as.numeric) %>% 
-  ggplot(aes(Year, Strength)) +
+  ggplot(aes(Year, Strength+0.001)) +
   geom_line(aes(colour = as.factor(!ID %in% BrokenFocalID2),
                 alpha = as.factor(ID %in% BrokenFocalID2),
                 group = ID)) +
@@ -234,5 +207,3 @@ MaintainedLines/BrokenLines
 
 ggsave("Maintained_vs_Broken.jpeg", units = "mm", height = 180, width = 180)
 
-# IDDF %>% 
-#   pivot_wider(Strength, names_from = "Year", id_cols = "ID")
