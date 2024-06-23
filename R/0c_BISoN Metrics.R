@@ -1,24 +1,33 @@
-#bison_proximity_metrics.R
+
+# 03c_BISoN Metrics.R ####
 
 #Model proximity networks with bison
 #Proximity was collected in scans across all years and is a binary data type.
 
 #C. Testard October 2022
 
-#Load libraries
-#bison package
-library(bisonR)
-library(dplyr)
-library(brms)
-library(igraph)
-
-#Set seed for reproducibility
-set.seed(1234)
-
-#Load data
-data_path = "~/Documents/GitHub/Cayo-Maria-Survival/Data/R.Data/"
-load(paste0(data_path,"proximity_data.RData"))
-#load(paste0(data_path,"BisonProximity.RData"))
+{
+  
+  #Load libraries
+  #bison package
+  library(bisonR)
+  library(dplyr)
+  library(brms)
+  library(igraph)
+  
+  #Set seed for reproducibility
+  set.seed(1234)
+  
+  #Load data
+  # data_path = "~/Documents/GitHub/Cayo-Maria-Survival/Data/R.Data/"
+  
+  source("R/Functions/AdjacencyFromEdgeList.R")
+  
+  load("Data/Intermediate/proximity_data.RData")
+  
+  #load(paste0(data_path,"BisonProximity.RData"))
+  
+}
 
 edgelist.all$groupyear = paste0(edgelist.all$group, edgelist.all$year)
 
@@ -31,6 +40,7 @@ edgelist.all$groupyear = paste0(edgelist.all$group, edgelist.all$year)
 #                "V2016","F2016","F2017",
 #                "KK2017","V2017","V2018","KK2018",
 #                "S2019","V2019","F2021","V2021")
+
 group = c("F","KK","F","HH","F","V","R","KK","R","V","F","HH","F","KK","V","V","KK","S","V","F","V","TT","V","F")
 years = c(2013, 2013,2014,2014,2015,2015,2015,2015,
           2016,2016,2016,2016,2017,2017,2017,
@@ -43,21 +53,22 @@ groupyears = c("F2013","KK2013","F2014","HH2014","F2015","V2015","R2015","KK2015
 gy=24; node_strength_all = list(); node_degree_all = list(); density_all = list(); node_ids=list()
 
 #Set parameters
-num_iter = 10
+
+num_iter = 1000
+
 edge_thresh=0.0001
 
 for (gy in 1:length(groupyears)){ #for all group-years
   
-  ##############################################################
-  ## STEP 1: Fit network for binary data  (i.e., proximity) ###
-  ##############################################################
+  # STEP 1: Fit network for binary data  (i.e., proximity) ####
+  
   # This step fits an edge weight model using conjugate priors, 
   # capturing uncertainty in social network edges
   
   priors <- get_default_priors("binary_conjugate")#define priors
   priors$edge <- "beta(0.1,0.1)" # set less flat priors
   #prior_check(priors, "binary_conjugate")
-
+  
   #Load observed proximity edgelist
   el = edgelist.all[edgelist.all$groupyear==groupyears[gy],]
   el$year=factor(el$year)
@@ -66,9 +77,9 @@ for (gy in 1:length(groupyears)){ #for all group-years
   #Fit network with bison binary model
   fit.el <- bison_model(
     (count | total_samples) ~ dyad(ID1, ID2),
-    data=el,
+    data = el,
     model_type = "binary_conjugate", #Count conjugate for aggression data 
-    priors=priors
+    priors = priors
   )
   #plot_predictions(fit.el, num_draws=20)
   
@@ -78,7 +89,7 @@ for (gy in 1:length(groupyears)){ #for all group-years
   # 
   # #Visualize network with uncertainty estimates
   # plot_network(fit.el, lwd=5)
-
+  
   #Draw n edgelists from the posterior of the network
   samples.post<-draw_edgelist_samples(fit.el, num_draws=num_iter)
   samples.post[,c(3:ncol(samples.post))]<-plogis(as.matrix(samples.post[,c(3:ncol(samples.post))])) #Convert back from log scale
@@ -96,10 +107,10 @@ for (gy in 1:length(groupyears)){ #for all group-years
     weightedEL<-samples.post[,c(1:2,2+i)] #extract edge list from posterior
     names(weightedEL)=c("node_1","node_2","draw")
     weightedEL[weightedEL[,3]<edge_thresh,3]=0#when edge strength is below a certain threshold, 
-                                              #consider that edge to be 0
-
+    #consider that edge to be 0
+    
     #Create adjacency matrix from edgelist
-    adjMat = dils::AdjacencyFromEdgelist(weightedEL)# create adjacency matrix based on edge list.
+    adjMat = AdjacencyFromEdgelist(weightedEL)# create adjacency matrix based on edge list.
     data = adjMat[["adjacency"]]; rownames(data) = adjMat[["nodelist"]]; colnames(data) = adjMat[["nodelist"]]
     #read adjacency matrix into igraph
     m=as.matrix(data) # coerces the data set as a matrix
@@ -122,12 +133,12 @@ for (gy in 1:length(groupyears)){ #for all group-years
     #   cv_id$cv[i]=var(weightedEL_nonzero$draw[idx])/mean(weightedEL_nonzero$draw[idx])
     # }
     # hist(cv_id$cv)
-
+    
     #Save over all network instantiations
     igraph_strength_all=rbind(igraph_strength_all, igraph_strength)
     igraph_degree_all=rbind(igraph_degree_all, igraph_degree)
     igraph_density_all=rbind(igraph_density_all, igraph_density)
-
+    
     print(i)
   }
   names(igraph_strength_all)=nodes.id; names(igraph_degree_all)=nodes.id;  #Assign node id
@@ -141,7 +152,9 @@ for (gy in 1:length(groupyears)){ #for all group-years
   
 }
 
-setwd("~/Documents/GitHub/Cayo-Maria-Survival/Data/R.Data/")
-save(node_ids, node_degree_all, node_strength_all, density_all, num_iter, edge_thresh, file = "BisonProximity.RData")
+# setwd("~/Documents/GitHub/Cayo-Maria-Survival/Data/R.Data/")
+
+save(node_ids, node_degree_all, node_strength_all, density_all, num_iter, edge_thresh, 
+     file = "Data/Intermediate/BisonProximity.RData")
 
 
