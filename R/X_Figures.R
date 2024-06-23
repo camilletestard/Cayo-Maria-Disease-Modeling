@@ -71,8 +71,7 @@ OutputDF %<>% filter(between(Mean, 3, 7))
 
 # Panel D: Model effect comparisons ####
 
-MCMC1 <- readRDS("Output/EpidemiologyModel.rds")
-MCMC1 <- readRDS("Model.rds")
+MCMC1 <- readRDS("Data/Outputs/EpidemiologyModel.rds")
 
 MCMCOutput <- 
   MCMC1$Sol %>% data.frame %>% 

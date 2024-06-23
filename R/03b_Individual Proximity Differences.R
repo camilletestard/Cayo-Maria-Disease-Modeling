@@ -26,8 +26,9 @@ library(sjmisc)
 #Load data
 # setwd("~/Documents/GitHub/Cayo-Maria-Survival/Data/R.Data/")
 
-# load("BisonProximity.RData")
-load("Data/Intermediate/BisonFittedNetworks.RData")
+load("BisonProximity.RData")
+
+# load("Data/Intermediate/BisonFittedNetworks.RData")
 
 #Set group year list
 

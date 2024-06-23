@@ -110,4 +110,4 @@ TestDF <- OutputDF %>% mutate(PI = P_I)
 
 MCMC1 <- MCMCglmm(Mean ~ P_I + PostMaria, random =~Rep, data = TestDF)
 
-MCMC1 %>% saveRDS("Model.rds")
+MCMC1 %>% saveRDS("Data/Outputs/EpidemiologyModel.rds")
