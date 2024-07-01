@@ -23,10 +23,14 @@ library(ggplot2)
 library(sjPlot)
 library(sjmisc)
 
+library(cowplot)
+
+theme_set(theme_cowplot())
+
 #Load data
 # setwd("~/Documents/GitHub/Cayo-Maria-Survival/Data/R.Data/")
 
-load("BisonProximity.RData")
+load("Data/Intermediate/BisonMetrics.RData")
 
 # load("Data/Intermediate/BisonFittedNetworks.RData")
 
@@ -48,7 +52,7 @@ imputed.data = list(); imputed.data.prepost = list(); i = 1; gy = 1;
 
 imputed.density = list()
 
-num_iter <- 1000
+num_iter <- 100
 
 for (i in 1:num_iter){
   
@@ -133,38 +137,46 @@ for (i in 1:num_iter){
 }
 
 #Create imputed dataset to use in frequentist survival models
-imp<-miceadds::datalist2mids(imputed.data)
-imp.prepost<-miceadds::datalist2mids(imputed.data.prepost)
 
-###########################################################
-## STEP 2: Run downstream analyses such as regression  ###
-###########################################################
-#This step propagates the uncertainty from step 1 through subsequent analyses such as regressions
+imp <- miceadds::datalist2mids(imputed.data)
+imp.prepost <- miceadds::datalist2mids(imputed.data.prepost)
+
+# STEP 2: Run downstream analyses such as regression####
+
+# This step propagates the uncertainty from step 1 through subsequent analyses such as regressions
+
 ### 1. Test the long-term effects of Hurricane Maria on proximity###
 
 # setwd("~/Documents/Github/Cayo-Maria-Disease-Modeling/Results")
 
 mdl.strength.proxPrePost <- with(imp, lmer(std.prox.strength~ 1+ isPost*ordinal.rank +age+ sex 
                                            +(1|group) + (1|id)))
+
 summary(mice::pool(mdl.strength.proxPrePost))
 
 #plot model for one iteration
-data.imp= imputed.data[[1]]
+
+data.imp = imputed.data[[1]]
+
 mdl.strength<-lmer(std.prox.strength~ 1+ isPost*ordinal.rank +age+ sex 
                    +(1|id/group) , data=data.imp)
 summary(mdl.strength)
 
 #pairwise comparisons
-xx.strength<-as.data.frame(summary(emmeans(mdl.strength, pairwise ~ isPost*ordinal.rank))$contrasts)
+
+xx.strength <- as.data.frame(summary(emmeans(mdl.strength, pairwise ~ isPost*ordinal.rank))$contrasts)
+
 write.csv(xx.strength, file = "Results/contrasts_hurricaneRank_strength.csv")
 
 #visualize model
-plot_model(mdl.strength); ggsave("infection_individual_factors.pdf")
+
+plot_model(mdl.strength); ggsave("Figures/infection_individual_factors.pdf")
 
 # RG<- ref_grid(mdl.strength, at = list(ordinal.rank = c("L","M","H")))
 # emmip(RG, isPost~ordinal.rank, style = "factor")
 
 xxplot.strength = xx.strength[c(2,4,11,7,9,14),]; 
+
 xxplot.strength$isPost = c("pre","pre","pre","post","post","post"); xxplot.strength$metric = "strength"
 
 
@@ -175,40 +187,85 @@ summary(mice::pool(mdl.degree.proxPrePost))
 
 mdl.degree<-lmer(std.prox.degree~ 1+ isPost*ordinal.rank +age+ sex 
                  +(1|id/group), data=data.imp)
+
 summary(mdl.degree)
 
-xx.degree<-as.data.frame(summary(emmeans(mdl.degree, pairwise ~ isPost*ordinal.rank))$contrasts)
+xx.degree <- as.data.frame(summary(emmeans(mdl.degree, pairwise ~ isPost*ordinal.rank))$contrasts)
 
 write.csv(xx.degree, file = "Results/contrasts_hurricaneRank_degree.csv")
 
 # RG<- ref_grid(mdl.degree, at = list(ordinal.rank = c("L","M","H")))
 # emmip(RG, isPost~ordinal.rank, style = "factor")
-xxplot.degree = xx.degree[c(2,4,11,7,9,14),]; 
-xxplot.degree$isPost = c("pre","pre","pre","post","post","post"); xxplot.degree$metric = "degree"
 
-plot_model(mdl.degree); ggsave("infection_individual_factors.pdf")
+# Plotting ####
 
+xx.strength <- 
+  read.csv(file = "Results/contrasts_hurricaneRank_degree.csv")
 
-xxplot = rbind(xxplot.degree, xxplot.strength); 
-xxplot$contrast = c("High-Low", "High - Med", "Low-Med",
-                    "High-Low", "High - Med", "Low-Med", 
-                    "High-Low", "High - Med", "Low-Med",
-                    "High-Low", "High - Med", "Low-Med")
+# xxplot.strength = xx.strength[c(2,4,11,7,9,14),]; 
+
+# xxplot.strength$isPost = c("pre","pre","pre","post","post","post"); xxplot.strength$metric = "strength"
+
+xx.strength %<>% 
+  separate(contrast, sep = " - ", into = c("Level1", "Level2")) %>% 
+  separate(Level1, sep = " ", into = c("Hurricane1", "Rank1")) %>% 
+  separate(Level2, sep = " ", into = c("Hurricane2", "Rank2")) %>% 
+  filter(Hurricane1 == Hurricane2)
+
+xx.degree <- 
+  read.csv(file = "Results/contrasts_hurricaneRank_degree.csv")
+
+# xxplot.degree = xx.degree[c(2,4,11,7,9,14),]; 
+
+# xxplot.degree$isPost = c("pre","pre","pre","post","post","post"); xxplot.degree$metric = "degree"
+
+xx.degree %<>% 
+  separate(contrast, sep = " - ", into = c("Level1", "Level2")) %>% 
+  separate(Level1, sep = " ", into = c("Hurricane1", "Rank1")) %>% 
+  separate(Level2, sep = " ", into = c("Hurricane2", "Rank2")) %>% 
+  filter(Hurricane1 == Hurricane2)
+
+xxplot = rbind(xx.degree %>% mutate(metric = "Degree"), 
+               xx.strength %>% mutate(metric = "Strength"))
+
+# xxplot$contrast = c("High-Low", "High - Med", "Low-Med",
+#                     "High-Low", "High - Med", "Low-Med", 
+#                     "High-Low", "High - Med", "Low-Med",
+#                     "High-Low", "High - Med", "Low-Med")
+
+xxplot %<>% 
+  mutate_at(c("Rank1", "Rank2"), 
+            ~str_replace_all(.x, c("H" = "High", 
+                                   "M" = "Med", 
+                                   "L" = "Low"))) %>% 
+  mutate(contrast = paste0(Rank1, "-", Rank2))
+
 xxplot %>%
+  mutate(isPost = Hurricane1 %>% CamelConvert) %>% 
   mutate(isPost = fct_relevel(isPost,
-                              "pre", "post")) 
-ggplot(xxplot, aes(x=factor(contrast, level=c("Low-Med", "High - Med", "High-Low")), y=estimate, colour=isPost)) + 
-  geom_point()+
-  geom_errorbar(aes(ymin=estimate-SE, ymax=estimate+SE), width=.1)+
-  geom_hline(yintercept=0, linetype="dashed", color = "black")+ 
-  facet_grid(~metric)+
-  theme_light()+coord_flip()
-ggsave("NetworkMetric_byRank_byHurricane.pdf")
+                              "Pre", "Post")) %>%
+  
+  ggplot(aes(x = factor(contrast, level = c("Low-Med", "High - Med", "High-Low")), 
+             y = estimate, group = isPost, colour = isPost)) + 
+  geom_errorbar(aes(ymin = estimate - SE, ymax = estimate + SE), 
+                position = position_dodge(w = 0.5),
+                width = .1) +
+  geom_point(position = position_dodge(w = 0.5), colour = "black", size = 3) +
+  geom_point(position = position_dodge(w = 0.5), size = 2) +
+  geom_hline(yintercept = 0, 
+             linetype = "dashed", 
+             color = "black")+ 
+  facet_grid(~metric, scales = "free") +
+  # theme_light() +
+  coord_flip()
+
+ggsave("Figures/NetworkMetric_byRank_byHurricane.pdf")
 
 #Save
 # setwd("~/Documents/GitHub/Cayo-Maria-Disease-Modeling/Data/R.Data/")
 
-save(imp, mdl.strength.proxPrePost, mdl.degree.proxPrePost, file = "Data/Outputs/ProxMdlOutput_PrePost.RData")
+save(imp, mdl.strength.proxPrePost, mdl.degree.proxPrePost, 
+     file = "Data/Outputs/ProxMdlOutput_PrePost.RData")
 
 #load("ProxMdlOutput_PrePost.RData")
 
