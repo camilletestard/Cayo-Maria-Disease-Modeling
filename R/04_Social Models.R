@@ -3,36 +3,39 @@
 
 # Initially written by Camille, rewritten and pipelined by Greg
 
-#Model proximity network with bison - get a distribution of possible networks from the observed data
-#Regression from imputed dataset to test the change in proximity over time according to age, sex and rank categories
-#C. Testard February 2024
+# Model proximity network with bison - get a distribution of possible networks from the observed data
 
-#Load libraries
-#data wrangling
-library(dplyr)
-library(forcats)
+# Regression from imputed dataset to test the change in proximity over time according to age, sex and rank categories
 
-#Modelling
-library(lme4)
-library(lmerTest)
-library(broom.mixed)
-library(emmeans)
+# C. Testard February 2024
 
-#For plotting
-library(ggplot2)
-library(sjPlot)
-library(sjmisc)
-
-library(cowplot)
-
-theme_set(theme_cowplot())
-
-#Load data
-# setwd("~/Documents/GitHub/Cayo-Maria-Survival/Data/R.Data/")
-
-load("Data/Intermediate/BisonMetrics.RData")
-
-# load("Data/Intermediate/BisonFittedNetworks.RData")
+{
+  
+  #Load libraries
+  #data wrangling
+  library(dplyr)
+  library(forcats)
+  
+  #Modelling
+  library(lme4)
+  library(lmerTest)
+  library(broom.mixed)
+  library(emmeans)
+  
+  #For plotting
+  library(ggplot2)
+  library(sjPlot)
+  library(sjmisc)
+  
+  library(cowplot)
+  
+  theme_set(theme_cowplot())
+  
+  dir_create("Data/Intermediate/SocialLMER")
+  
+  load("Data/Intermediate/BisonMetrics.RData")
+  
+}
 
 #Set group year list
 
@@ -52,11 +55,18 @@ imputed.data = list(); imputed.data.prepost = list(); i = 1; gy = 1;
 
 imputed.density = list()
 
-num_iter <- 100
+StrengthModelList <- DegreeModelList <- list()
 
-for (i in 1:num_iter){
+num_iter <- 1000
+
+i <- "Data/Intermediate/SocialLMER" %>% dir_ls %>% length %>% add(1)
+
+for (i in i:num_iter){
+  
+  print(i)
   
   data.all <- data.frame(); density.iter = data.frame(matrix(NA, nrow = num_iter)); names(density.iter)="dens"
+  
   density.all <- data.frame();
   
   for (gy in 1:length(groupyears)){
@@ -64,14 +74,14 @@ for (i in 1:num_iter){
     # data_path<-'~/Documents/GitHub/Cayo-Maria-Survival/Data/Data All Cleaned/BehavioralDataFiles/'
     data_path <- 'Data/Input/'
     data = read.csv(paste0(data_path,"Group", groupyears[gy], "_GroupByYear.txt")) #load meta data
-    data=data[data$hrs.focalfollowed>0,]
+    data = data[data$hrs.focalfollowed>0,]
     
     data$group = group[gy]
-    data$year=years[gy]; 
+    data$year = years[gy]; 
     data$isPost = ifelse(years[gy]<2018, "pre","post")
     data$isPost.year = ifelse(years[gy]<2018,"pre",paste(data$isPost, data$year,sep='.'))
     data$id = as.factor(data$id)
-    data$sex[data$sex=="FALSE"]="F"; data$sex = as.factor(data$sex);
+    data$sex[data$sex == "FALSE"] = "F"; data$sex = as.factor(data$sex);
     data$id.year = paste(data$id, data$year,sep='.')
     
     strength<-node_strength_all[[groupyears[gy]]][i,]
@@ -79,21 +89,26 @@ for (i in 1:num_iter){
     node.id<-node_ids[[groupyears[gy]]]
     data$prox.strength<-as.numeric(strength[match(data$id, node.id)])
     data$prox.degree<-as.numeric(degree[match(data$id, node.id)])
-    data.final<-data[,c("id","sex","age","ordinal.rank","group","year","isPost","isPost.year", "id.year","prox.strength", "prox.degree")]
+    data.final<-data[,c("id", "sex", "age", "ordinal.rank", "group", "year", "isPost", "isPost.year", "id.year", 
+                        "prox.strength", "prox.degree")]
     
-    data.all<-rbind(data.all, data.final)
+    data.final %<>% na.omit
     
-    density.iter$dens=density_all[[groupyears[gy]]]
-    density.iter$group=group[gy]
-    density.iter$year=years[gy]
+    data.all <- rbind(data.all, data.final)
+    
+    density.iter$dens = density_all[[groupyears[gy]]]
+    density.iter$group = group[gy]
+    density.iter$year = years[gy]
     density.iter$isPost = ifelse(years[gy]<2018, "pre","post")
     density.iter$isPost.year = ifelse(years[gy]<2018,"pre",paste(data$isPost, data$year,sep='.'))
     
-    density.all<-rbind(density.all, density.iter)
+    density.all <- rbind(density.all, density.iter)
   }
   
+  data.all %<>% mutate_at("prox.strength", log10)
+  
   #Standardize
-  density.all$std.dens <-(density.all$dens-mean(density.all$dens))/sd(density.all$dens)
+  density.all$std.dens <-(density.all$dens - mean(density.all$dens))/sd(density.all$dens)
   data.all$std.prox.strength = (data.all$prox.strength-mean(data.all$prox.strength))/sd(data.all$prox.strength)
   data.all$std.prox.degree = (data.all$prox.degree-mean(data.all$prox.degree))/sd(data.all$prox.degree)
   
@@ -106,7 +121,7 @@ for (i in 1:num_iter){
     mutate(isPost = fct_relevel(isPost,
                                 "pre", "post")) %>%
     mutate(isPost.year = fct_relevel(isPost.year,
-                                     "pre", "post.2018","post.2019","post.2021", "post.2022"))
+                                     "pre", "post.2018", "post.2019", "post.2021", "post.2022"))
   #"post.2018","pre","post.2019","post.2021", "post.2022"))
   
   density.all = density.all %>%
@@ -117,8 +132,8 @@ for (i in 1:num_iter){
   #"post.2018","pre","post.2019","post.2021", "post.2022"))
   
   
-  imputed.data[[i]]=data.all
-  imputed.density[[i]]=density.all
+  imputed.data[[i]] = data.all
+  imputed.density[[i]] = density.all
   
   
   #If only consider IDs present both pre and post
@@ -130,26 +145,75 @@ for (i in 1:num_iter){
   table(id.PreAndPost$group)
   data.prepost = subset(data.all, id %in% id.PreAndPost$id)
   
-  imputed.data.prepost[[i]]<-data.prepost
+  imputed.data.prepost[[i]] <- data.prepost
   
-  print(i)
+  # Running internal Bayesian models 
+  
+  mdl.strength <- lmer(std.prox.strength ~ 1 + isPost*(ordinal.rank + age + sex) + (1|id/group),
+                       data = data.all)
+  
+  # mdl.strength <- MCMCglmm(std.prox.strength ~ 1 + isPost*(ordinal.rank + age + sex), 
+  #                          random = ~ id + group,
+  #                          data = data.all)
+  
+  StrengthModelList[[i]] <- mdl.strength
+  
+  mdl.strength %>% saveRDS(glue::glue("Data/Intermediate/SocialLMERStrength/{i}.rds"))
+  
+  mdl.degree <- lmer(std.prox.degree ~ 1 + isPost*(ordinal.rank + age + sex) +
+                       (1|id/group),
+                     data = data.all)
+  
+  # mdl.degree <- MCMCglmm(std.prox.degree ~ 1 + isPost*(ordinal.rank + age + sex),
+  #                        random = ~ id + group,  
+  #                        data = data.all)
+
+  # DegreeModelList[[i]] <- mdg.degree
+  
+  mdl.degree %>% saveRDS(glue::glue("Data/Intermediate/SocialLMERDegree/{i}.rds"))
+  
+  # pairwise comparisons
+  
+  # xx.strength <- as.data.frame(summary(emmeans(mdl.strength, pairwise ~ isPost*ordinal.rank))$contrasts)
   
 }
 
-#Create imputed dataset to use in frequentist survival models
+StrengthModelDifferences <- 
+  StrengthModelList %>% 
+  map(function(mdl.strength){
+    
+    as.data.frame(summary(emmeans(mdl.strength, pairwise ~ isPost*ordinal.rank))$contrasts)
+    
+  }) %>% 
+  bind_rows(.id = "Rep")
+
+StrengthModelDifferences
+
+StrengthModelDifferences <- 
+  StrengthModelList %>% 
+  map(function(mdl.strength){
+    
+    as.data.frame(summary(emmeans(mdl.strength, pairwise ~ isPost*ordinal.rank))$contrasts)
+    
+  }) %>% 
+  bind_rows(.id = "Rep")
+
+
+
+# Create imputed dataset to use in frequentist survival models
 
 imp <- miceadds::datalist2mids(imputed.data)
 imp.prepost <- miceadds::datalist2mids(imputed.data.prepost)
 
-# STEP 2: Run downstream analyses such as regression####
+# STEP 2: Run downstream analyses such as regression ####
 
 # This step propagates the uncertainty from step 1 through subsequent analyses such as regressions
 
-### 1. Test the long-term effects of Hurricane Maria on proximity###
+### 1. Test the long-term effects of Hurricane Maria on proximity ###
 
 # setwd("~/Documents/Github/Cayo-Maria-Disease-Modeling/Results")
 
-mdl.strength.proxPrePost <- with(imp, lmer(std.prox.strength~ 1+ isPost*ordinal.rank +age+ sex 
+mdl.strength.proxPrePost <- with(imp, lmer(std.prox.strength ~ 1 + isPost*ordinal.rank + age + sex 
                                            +(1|group) + (1|id)))
 
 summary(mice::pool(mdl.strength.proxPrePost))
