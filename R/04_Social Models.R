@@ -47,6 +47,28 @@ years = c(2013, 2013,2014,2014,2015,2015,2015,2015,
 
 groupyears = paste0(group,years)
 
+DataList <- list()
+
+for (gy in 1:length(groupyears)){
+  
+  # data_path<-'~/Documents/GitHub/Cayo-Maria-Survival/Data/Data All Cleaned/BehavioralDataFiles/'
+  data_path <- 'Data/Input/'
+  data <- read.csv(paste0(data_path,"Group", groupyears[gy], "_GroupByYear.txt")) #load meta data
+  
+  data = data[data$hrs.focalfollowed>0,]
+  
+  data$group = group[gy]
+  data$year = years[gy]; 
+  data$isPost = ifelse(years[gy]<2018, "pre","post")
+  data$isPost.year = ifelse(years[gy]<2018,"pre",paste(data$isPost, data$year,sep='.'))
+  data$id = as.factor(data$id)
+  data$sex[data$sex == "FALSE"] = "F"; data$sex = as.factor(data$sex);
+  data$id.year = paste(data$id, data$year,sep='.')
+  
+  DataList[[gy]] <- data
+  
+}
+
 # STEP 1: CREATE IMPUTED DATASSET ####
 
 # Extract change in proximity from each draw to create imputed data set:
@@ -57,9 +79,11 @@ imputed.density = list()
 
 StrengthModelList <- DegreeModelList <- list()
 
-num_iter <- 1000
+num_iter <- 100
 
 i <- "Data/Intermediate/SocialLMER" %>% dir_ls %>% length %>% add(1)
+
+i <- 1
 
 for (i in i:num_iter){
   
@@ -71,26 +95,15 @@ for (i in i:num_iter){
   
   for (gy in 1:length(groupyears)){
     
-    # data_path<-'~/Documents/GitHub/Cayo-Maria-Survival/Data/Data All Cleaned/BehavioralDataFiles/'
-    data_path <- 'Data/Input/'
-    data = read.csv(paste0(data_path,"Group", groupyears[gy], "_GroupByYear.txt")) #load meta data
-    data = data[data$hrs.focalfollowed>0,]
+    data <- DataList[[gy]]
     
-    data$group = group[gy]
-    data$year = years[gy]; 
-    data$isPost = ifelse(years[gy]<2018, "pre","post")
-    data$isPost.year = ifelse(years[gy]<2018,"pre",paste(data$isPost, data$year,sep='.'))
-    data$id = as.factor(data$id)
-    data$sex[data$sex == "FALSE"] = "F"; data$sex = as.factor(data$sex);
-    data$id.year = paste(data$id, data$year,sep='.')
-    
-    strength<-node_strength_all[[groupyears[gy]]][i,]
-    degree<-node_degree_all[[groupyears[gy]]][i,]
-    node.id<-node_ids[[groupyears[gy]]]
+    strength <- node_strength_all[[groupyears[gy]]][i,]
+    degree <- node_degree_all[[groupyears[gy]]][i,]
+    node.id <- node_ids[[groupyears[gy]]]
     data$prox.strength<-as.numeric(strength[match(data$id, node.id)])
     data$prox.degree<-as.numeric(degree[match(data$id, node.id)])
-    data.final<-data[,c("id", "sex", "age", "ordinal.rank", "group", "year", "isPost", "isPost.year", "id.year", 
-                        "prox.strength", "prox.degree")]
+    data.final <- data[,c("id", "sex", "age", "ordinal.rank", "group", "year", "isPost", "isPost.year", "id.year", 
+                          "prox.strength", "prox.degree")]
     
     data.final %<>% na.omit
     
@@ -103,6 +116,7 @@ for (i in i:num_iter){
     density.iter$isPost.year = ifelse(years[gy]<2018,"pre",paste(data$isPost, data$year,sep='.'))
     
     density.all <- rbind(density.all, density.iter)
+    
   }
   
   data.all %<>% mutate_at("prox.strength", log10)
@@ -119,16 +133,17 @@ for (i in i:num_iter){
   data.all$group<-as.factor(data.all$group)
   data.all = data.all %>%
     mutate(isPost = fct_relevel(isPost,
-                                "pre", "post")) %>%
-    mutate(isPost.year = fct_relevel(isPost.year,
-                                     "pre", "post.2018", "post.2019", "post.2021", "post.2022"))
+                                "pre", "post"))# %>%
+    # mutate(isPost.year = fct_relevel(isPost.year,
+    #                                  "pre", "post.2018", "post.2019", "post.2021", "post.2022"))
   #"post.2018","pre","post.2019","post.2021", "post.2022"))
   
   density.all = density.all %>%
     mutate(isPost = fct_relevel(isPost,
-                                "pre", "post")) %>%
-    mutate(isPost.year = fct_relevel(isPost.year,
-                                     "pre", "post.2018","post.2019","post.2021", "post.2022"))
+                                "pre", "post")) #%>%
+    # mutate(isPost.year = fct_relevel(isPost.year,
+    #                                  "pre", "post.2018","post.2019","post.2021", "post.2022"))
+  
   #"post.2018","pre","post.2019","post.2021", "post.2022"))
   
   
@@ -149,34 +164,55 @@ for (i in i:num_iter){
   
   # Running internal Bayesian models 
   
-  mdl.strength <- lmer(std.prox.strength ~ 1 + isPost*(ordinal.rank + age + sex) + (1|id/group),
-                       data = data.all)
+  # mdl.strength <- lmer(std.prox.strength ~ 1 + isPost*(ordinal.rank + age + sex) + (1|id/group),
+  #                      data = data.all)
   
   # mdl.strength <- MCMCglmm(std.prox.strength ~ 1 + isPost*(ordinal.rank + age + sex), 
   #                          random = ~ id + group,
   #                          data = data.all)
   
+  data.all %<>% 
+    rename(Rank = ordinal.rank, Pop = group) %>% 
+    rename(ID = id) %>% 
+    rename_all(CamelConvert)
+  
+  mdl.strength <- inla(Std.prox.strength ~ IsPost * (Age + Sex + Rank) + 
+                         f(ID, model = "iid") + f(Pop, model = "iid"),
+                       # family = "poisson",
+                       control.compute = list(dic = TRUE),
+                       data = data.all)
+  
   StrengthModelList[[i]] <- mdl.strength
   
-  mdl.strength %>% saveRDS(glue::glue("Data/Intermediate/SocialLMERStrength/{i}.rds"))
+  # mdl.strength %>% saveRDS(glue::glue("Data/Intermediate/SocialLMERStrength/{i}.rds"))
   
-  mdl.degree <- lmer(std.prox.degree ~ 1 + isPost*(ordinal.rank + age + sex) +
-                       (1|id/group),
-                     data = data.all)
+  # mdl.degree <- lmer(std.prox.degree ~ 1 + isPost*(ordinal.rank + age + sex) +
+  #                      (1|id/group),
+  #                    data = data.all)
   
   # mdl.degree <- MCMCglmm(std.prox.degree ~ 1 + isPost*(ordinal.rank + age + sex),
   #                        random = ~ id + group,  
   #                        data = data.all)
-
-  # DegreeModelList[[i]] <- mdg.degree
   
-  mdl.degree %>% saveRDS(glue::glue("Data/Intermediate/SocialLMERDegree/{i}.rds"))
+  mdl.degree <- inla(Std.prox.degree ~ IsPost * (Age + Sex + Rank) + 
+                       f(ID, model = "iid") + f(Pop, model = "iid"),
+                     # family = "poisson",
+                     control.compute = list(dic = TRUE),
+                     data = data.all)
+  
+  DegreeModelList[[i]] <- mdl.degree
+  
+  # mdl.degree %>% saveRDS(glue::glue("Data/Intermediate/SocialLMERDegree/{i}.rds"))
   
   # pairwise comparisons
   
   # xx.strength <- as.data.frame(summary(emmeans(mdl.strength, pairwise ~ isPost*ordinal.rank))$contrasts)
   
 }
+
+StrengthModelList[1:10] %>% Efxplot
+
+DegreeModelList[1:10] %>% Efxplot
 
 StrengthModelDifferences <- 
   StrengthModelList %>% 
