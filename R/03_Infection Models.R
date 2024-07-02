@@ -3,8 +3,13 @@
 
 library(tidyverse); library(ggregplot); library(ggforce); library(cowplot); library(fs)
 library(magrittr); library(colorspace); library(lme4); library(lmerTest); library(patchwork)
+library(INLA)
 
 theme_set(theme_cowplot())
+
+dir_create("Intermediate/IndividualINLA")
+
+# Import the population timecourses ####
 
 FileList <- 
   "Data/Outputs/BISoN" %>% 
@@ -42,18 +47,8 @@ names(IndivDFList) <-
 
 IndivDF <- IndivDFList %>% bind_rows(.id = "Rep")
 
-# IndivDF$S_I <- IndivDF$File %<>% str_split("_") %>% map_chr(last) %>% str_remove(".rds")
-# 
-# IndivDF$Rep <- 
-#   IndivDF$File %>% 
-#   str_split("_") %>% 
-#   map_chr(2)
-# 
-# IndivDF$Rep %<>% as.numeric
 
-# IndivDF %>% saveRDS("Data/Intermediate/IndividualInfectionStatus.rds")
-
-# Running model iterations ####
+# Attaching individual traits ####
 
 load("Data/Intermediate/proximity_data.RData")
 
@@ -62,41 +57,20 @@ IndividualTraits <-
   mutate(IsPost = ifelse(year < 2018, "Pre", "Post")) %>%
   mutate(Pop = paste0(group, year)) %>%
   dplyr::select(ID = ID1, Sex = ID1_sex, Rank = ID1_rank, Age = ID1_age, Pop, IsPost) %>%
-  # bind_rows(edgelist.all %>%
-  #             dplyr::select(ID = ID2, Sex = ID2_sex, Rank = ID2_rank, Age = ID2_age, Group = group, Year = year)) %>%
   unique
 
-# IDList <- 
-#   "Data/Input" %>% dir_ls(regex = "GroupByYear") %>% map(read.delim)
-# 
-# IDList %>% 
-#   bind_rows(.id = "File")
-
 IndivDF %<>% left_join(IndividualTraits)
-
-IndivDF
-
-# IndivDF %<>% mutate(IsPost = ifelse(Year < 2018, "Pre", "Post"))
-
-IndivDF$Rep <- IndivDF$File %>% str_split("_") %>% map_chr(2) %>% as.numeric
-
-NIterations <- IndivDF$Rep %>% max
-
-i <- 1
-
-dir_create("Data/Intermediate/IndividualMCMC")
 
 IndivDF2 <- 
   IndivDF %>% 
   mutate_at("Sex", ~substr(.x, 1, 1)) %>% 
   filter(Age > 5) %>% 
   filter(Time > 0) %>% 
-  # mutate_at("Time", ~log(.x)) %>% 
   mutate_at("Age", ~.x/10) %>% 
   mutate(S_I = str_split(File, "_") %>% map_chr(last) %>% str_remove(".rds") %>% as.numeric %>% multiply_by(10)) %>%
   na.omit
 
-# Mean Model ####
+# Analysing averaged infection timestep ####
 
 TestDF <- 
   IndivDF %>% 
@@ -104,19 +78,14 @@ TestDF <-
   filter(Age > 5) %>% 
   filter(Time > 0) %>% 
   mutate_at("Age", ~.x/10) %>% 
+  mutate_at("Rank", ~factor(.x, levels = c("L", "M", "H"))) %>% 
   na.omit %>% 
   group_by(ID, Pop, Sex, Rank, Age, IsPost) %>% 
   summarise(MeanInf = mean(Infected), 
             MeanTime = mean(Time),
             TimeSD = sd(Time),
             TimeSE = TimeSD/(1000^0.5)) %>% 
-  # mutate_at("MeanTime", ~log(.x))
   ungroup
-
-LMER1 <- lmer(MeanTime ~ IsPost * (Age + Sex + Rank) + (1|ID) + (1|Pop),
-              data = TestDF)
-
-library(INLA)
 
 TestDF %<>% mutate_at("MeanTime", round)
 
@@ -124,15 +93,14 @@ INLAGaussian <- inla(MeanTime ~ IsPost * (Age + Sex + Rank) +
                        f(ID, model = "iid") + f(Pop, model = "iid"),
                      # family = "poisson",
                      control.compute = list(dic = TRUE),
-                     data = TestDF)# %>% ungroup %>% mutate_at("MeanTime", ~c(scale(.x))))
+                     data = TestDF)
 
 INLALogGaussian <- inla(MeanTime ~ IsPost * (Age + Sex + Rank) + 
                           f(ID, model = "iid") + f(Pop, model = "iid"),
                         # family = "poisson",
                         family = "lognormal",
                         control.compute = list(dic = TRUE),
-                        data = TestDF# %>% mutate_at("MeanTime", log)
-)
+                        data = TestDF)
 
 INLACount <- inla(MeanTime ~ IsPost * (Age + Sex + Rank) + 
                     f(ID, model = "iid") + f(Pop, model = "iid"),
@@ -153,23 +121,80 @@ INLANB <- inla(MeanTime ~ IsPost * (Age + Sex + Rank) +
                data = TestDF)
 
 list(#INLAGaussian, 
-  INLALogGaussian, INLAGamma, INLACount, INLANB) %>% Efxplot(Intercept = F)
+     INLALogGaussian, INLAGamma, INLACount, INLANB) %>% Efxplot(Intercept = F)
 
 list(INLAGaussian, INLALogGaussian, INLAGamma, INLACount, INLANB) %>% MDIC
 
-LMER1 %>% 
-  saveRDS(file = glue::glue("Data/Intermediate/MeanLMER.rds"))
+list(INLAGaussian, INLALogGaussian, INLAGamma, INLACount, INLANB) %>% 
+  saveRDS("Data/Intermediate/IndividualInfectionModelList.rds")
 
 IM1 <- INLAModelAdd(Data = TestDF, 
                     Family = "poisson",
                     Response = "MeanTime",
                     Explanatory = c("IsPost", "Age", "Sex", "Rank"), 
                     Add = paste0("IsPost:", c("Age", "Sex", "Rank")),
+                    AllModels = T,
                     Random = c("ID", "Pop"), RandomModel = "iid"
 )
 
-IM1$FinalModel %>% Efxplot
+IM1$FinalModel %>% Efxplot(Intercept = F)
 
+IM1$AllModels[[2]] %>% Efxplot(Intercept = F)
+
+IM1$dDIC
+
+IM1 %>% saveRDS("Data/Intermediate/IndividualInfectionModelAdd.rds")
+
+# MCMC Repeatability Model ####
+
+TestDF %<>% data.frame
+
+TestDF %<>% mutate_at("Pop", ~substr(.x, 1, 1))
+
+MC1 <- MCMCglmm(MeanTime ~ IsPost * (Age + Sex + Rank), 
+                data = TestDF, 
+                family = "poisson",
+                random =~ ID)
+
+MC2 <- MCMCglmm(MeanTime ~ IsPost * (Age + Sex + Rank), 
+                data = TestDF, 
+                family = "poisson",
+                random =~ ID + ID:IsPost)
+
+MC3a <- MCMCglmm(MeanTime ~ Age + Sex + Rank, 
+                 data = TestDF %>% filter(IsPost == "Pre"), 
+                 family = "poisson",
+                 random =~ ID)
+
+MC3b <- MCMCglmm(MeanTime ~ Age + Sex + Rank, 
+                 data = TestDF %>% filter(IsPost == "Post"), 
+                 family = "poisson",
+                 random =~ ID)
+
+ModelList <- list(MC1, MC2, MC3a, MC3b)
+
+ModelList %>% saveRDS("Data/Intermediate/InfectionRepeatabilityModels.rds")
+
+ModelList %>% map(~MCMCRep(.x)) %>% bind_rows(.id = "Model") %>% 
+  mutate_at(3:5, ~round(as.numeric(.x), 3)) %>% 
+  mutate_at("Model", ~c("ID Overall", "ID:Hurricane", "ID Before", "ID After")[as.numeric(.x)]) %>% 
+  rename(Lower = lHPD, Upper = uHPD) %>% 
+  write.csv("Data/Outputs/InfectionRepeatabilityValues.csv", row.names = F)
+
+ModelList %>% 
+  map(MCMCRep) %>% 
+  bind_rows(.id = "Model") %>% filter(Component != "units") %>% 
+  # mutate_at(3:5, ~round(as.numeric(.x), 2))
+  mutate_at(3:5, ~as.numeric(.x)) %>% 
+  ggplot(aes(factor(Model), Mode, 
+             fill = Component)) + 
+  geom_col(colour = "black", position = "stack") + 
+  labs(x = "Model") + 
+  theme(axis.text.x = element_text(angle = 45, 
+                                   hjust = 1)) +
+  lims(y = c(NA, 1)) +
+  geom_hline(yintercept = 1, lty = 2, alpha = 0.4) +
+  scale_x_discrete(labels = c("Overall", "ID:Hurricane", "ID Before", "ID After"))
 
 # One Big Model ####
 
@@ -188,6 +213,10 @@ IM1 %>% Efxplot
 
 
 # Looping through reps ####
+
+IndivDF$Rep <- IndivDF$File %>% str_split("_") %>% map_chr(2) %>% as.numeric
+
+NIterations <- IndivDF$Rep %>% max
 
 i <- 1
 
@@ -243,7 +272,7 @@ for(i in i:NIterations){
   
   INLACount %>%
     saveRDS(file = glue::glue("Data/Intermediate/IndividualINLA/{i}.rds"))
-
+  
   # print(Sys.time() - t1)
   
   # INLANB <- inla(Time ~ IsPost * (Age + Sex + Rank) + 
@@ -256,6 +285,26 @@ for(i in i:NIterations){
   #               data = TestDF %>% mutate_if(is.character, as.factor))
   
 }
+
+# Importing estimates ####
+
+IMList <- 
+  "Data/Intermediate/IndividualINLA" %>% dir_ls %>% 
+  map(readRDS)
+
+MCMCEstimates <- 
+  IMList %>% map("summary.fixed") %>% map(c(as.data.frame, rownames_to_column)) %>% 
+  bind_rows(.id = "Rep") %>% 
+  rename(Var = rowname)
+
+MCMCEstimateSummaries <- 
+  MCMCEstimates %>% 
+  group_by(Var) %>% 
+  summarise(Mean = mean(mean), 
+            Lower = HPDinterval(as.mcmc(mean))[1], 
+            Upper = HPDinterval(as.mcmc(mean))[2])
+
+# LM below ####
 
 LMList <-
   "Data/Intermediate/IndividualLMER" %>% dir_ls %>% extract(1:1000) %>% 
@@ -285,38 +334,3 @@ MCMCEstimates %>%
              aes(x = Var, y = Mean),
              colour = "black") +
   coord_flip()
-
-# Averaging for Camille's models (DEFUNCT) ####
-
-IndivDF %<>% 
-  mutate(S_I_Category = cut(S_I, breaks = c(quantile(S_I, 0:3/3)), 
-                            labels = c("Low", "Med", "High"), 
-                            include.lowest = T))
-
-IndivDF %<>% 
-  group_by(ID, Pop, S_I_Category) %>% 
-  summarise(MeanInf = mean(Infected), 
-            MeanTime = mean(Time),
-            TimeSD = sd(Time),
-            TimeSE = TimeSD/(1000^0.5))
-
-# IndivDF %<>% 
-#   group_by(ID, Pop) %>% 
-#   summarise(MeanInf = mean(Infected), 
-#             MeanTime = mean(Time),
-#             TimeSD = sd(Time),
-#             TimeSE = TimeSD/(1000^0.5))
-
-# IDLevels <- IndivDF %>% arrange(MeanTime) %>% mutate_at("ID", ~paste0(.x, "_", Pop)) %>% pull(ID)
-
-# IndivDF %>% arrange(MeanTime) %>% mutate_at("ID", ~paste0(.x, "_", Pop)) %>% 
-#   mutate_at("ID", ~factor(.x, levels = IDLevels)) %>% 
-#   ggplot(aes(ID, MeanTime)) +
-#   geom_errorbar(aes(ymin = MeanTime - TimeSE, ymax = MeanTime + TimeSE, colour = Pop), 
-#                 position = position_dodge(w = 0.4)) +
-#   geom_point(aes(colour = Pop), 
-#              position = position_dodge(w = 0.4)) +
-#   theme(legend.position = "none")
-
-IndivMeanDF %>% saveRDS("Data/Outputs/IndividualTimesteps.rds")
-
