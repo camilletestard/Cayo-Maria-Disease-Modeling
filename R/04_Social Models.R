@@ -55,16 +55,37 @@ groupyears = paste0(group,years)
 #   
 # }
 
-load("Data/Intermediate/proximity_data.RData")
+# load("Data/Intermediate/proximity_data.RData")
+# 
+# IndividualTraits <-
+#   edgelist.all %>%
+#   mutate(Hurricane = factor(ifelse(year < 2018, "Pre", "Post"), levels = c("Pre", "Post"))) %>%
+#   mutate(Pop = paste0(group, year)) %>%
+#   dplyr::select(ID = ID1, Sex = ID1_sex, Rank = ID1_rank, Age = ID1_age, Pop, Hurricane) %>%
+#   unique
+# 
+# IndividualTraits %<>% mutate_at("Sex", ~substr(.x, 1, 1))
 
-IndividualTraits <-
-  edgelist.all %>%
-  mutate(Hurricane = factor(ifelse(year < 2018, "Pre", "Post"), levels = c("Pre", "Post"))) %>%
-  mutate(Pop = paste0(group, year)) %>%
-  dplyr::select(ID = ID1, Sex = ID1_sex, Rank = ID1_rank, Age = ID1_age, Pop, Hurricane) %>%
+TraitList <- "Data/Input" %>% dir_ls(regex = "GroupByYear") %>% map(read.csv)
+
+names(TraitList) <- "Data/Input" %>% list.files(pattern = "GroupByYear") %>% 
+  str_remove("Group") %>% str_split("_") %>% map_chr(1)
+
+IndividualTraits <- 
+  TraitList %>% map(~.x %>% 
+                      mutate_at("sex", ~substr(as.character(.x), 1, 1)) %>% # Some sex columns are logical
+                      mutate_at(vars(matches("idcode")), as.character)) %>% # Some csvs don't include this column, some are numeric
+  bind_rows(.id = "Pop") %>% 
+  rename_all(CamelConvert)
+
+IndividualTraits %<>% 
+  mutate(Year = substr(Pop, str_count(Pop) - 3, str_count(Pop))) %>% 
+  mutate(Hurricane = factor(ifelse(Year < 2018, "Pre", "Post"), 
+                            levels = c("Pre", "Post")))
+
+IndividualTraits %<>% 
+  dplyr::select(ID = Id, Pop, Hurricane, Sex, Age, Rank = Ordinal.rank) %>% 
   unique
-
-IndividualTraits %<>% mutate_at("Sex", ~substr(.x, 1, 1))
 
 # STEP 1: CREATE IMPUTED DATASSET ####
 
@@ -263,7 +284,7 @@ TestDF %<>%
   mutate_at("Age", ~.x/10)
 
 TestDF %<>% mutate_at("Strength", log)# %>% 
-  # mutate_at(c("Degree", "Strength"), ~-.x) 
+# mutate_at(c("Degree", "Strength"), ~-.x) 
 
 # mdl.strength <- inla(Strength ~ Hurricane * (Age + Sex + Rank) + 
 #                        f(ID, model = "iid") + f(Pop, model = "iid"),

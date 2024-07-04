@@ -51,16 +51,35 @@
   
   # Attaching individual traits ####
   
-  load("Data/Intermediate/proximity_data.RData")
+  # load("Data/Intermediate/proximity_data.RData")
+  # 
+  # IndividualTraits <-
+  #   edgelist.all %>%
+  #   mutate(Hurricane = factor(ifelse(year < 2018, "Pre", "Post"), levels = c("Pre", "Post"))) %>%
+  #   mutate(Pop = paste0(group, year)) %>%
+  #   dplyr::select(ID = ID1, Sex = ID1_sex, Rank = ID1_rank, Age = ID1_age, Pop, Hurricane) %>%
+  #   unique
   
-  IndividualTraits <-
-    edgelist.all %>%
-    mutate(Hurricane = factor(ifelse(year < 2018, "Pre", "Post"), levels = c("Pre", "Post"))) %>%
-    mutate(Pop = paste0(group, year)) %>%
-    dplyr::select(ID = ID1, Sex = ID1_sex, Rank = ID1_rank, Age = ID1_age, Pop, Hurricane) %>%
-    unique
+  TraitList <- "Data/Input" %>% dir_ls(regex = "GroupByYear") %>% map(read.csv)
   
-  IndivDF %<>% left_join(IndividualTraits)
+  names(TraitList) <- "Data/Input" %>% list.files(pattern = "GroupByYear") %>% 
+    str_remove("Group") %>% str_split("_") %>% map_chr(1)
+  
+  IndividualTraits <- 
+    TraitList %>% map(~.x %>% 
+                        mutate_at("sex", ~substr(as.character(.x), 1, 1)) %>% # Some sex columns are logical
+                        mutate_at(vars(matches("idcode")), as.character)) %>% # Some csvs don't include this column, some are numeric
+    bind_rows(.id = "Pop") %>% 
+    rename_all(CamelConvert)
+  
+  IndividualTraits %<>% 
+    mutate(Year = substr(Pop, str_count(Pop) - 3, str_count(Pop))) %>% 
+    mutate(Hurricane = factor(ifelse(Year < 2018, "Pre", "Post"), 
+                              levels = c("Pre", "Post")))
+  
+  IndivDF %<>% left_join(IndividualTraits %>% 
+                           dplyr::select(ID = Id, Pop, Hurricane, Sex, Age, Rank = Ordinal.rank) %>% 
+                           unique)
   
   IndivDF2 <- 
     IndivDF %>% 
@@ -90,9 +109,7 @@ TestDF <-
   na.omit %>% 
   group_by(ID, Pop, Sex, Rank, Age, Hurricane) %>% 
   summarise(MeanInf = mean(Infected), 
-            MeanTime = mean(Time),
-            TimeSD = sd(Time),
-            TimeSE = TimeSD/(1000^0.5)) %>% 
+            MeanTime = mean(Time)) %>% 
   ungroup
 
 TestDF %<>% mutate_at("MeanTime", round)
@@ -128,16 +145,19 @@ INLANB <- inla(MeanTime ~ Hurricane * (Age + Sex + Rank) +
                control.compute = list(dic = TRUE),
                data = TestDF)
 
-list(#INLAGaussian, 
-  INLALogGaussian, INLAGamma, INLACount, INLANB) %>% Efxplot(Intercept = F)
+list(INLAGaussian, 
+     INLALogGaussian, INLAGamma, INLACount, INLANB) %>% INLADICFig()
+
+list(INLAGaussian, 
+     INLALogGaussian, INLAGamma, INLACount, INLANB) %>% Efxplot(Intercept = F)
 
 list(INLAGaussian, INLALogGaussian, INLAGamma, INLACount, INLANB) %>% MDIC
 
 list(INLAGaussian, INLALogGaussian, INLAGamma, INLACount, INLANB) %>% 
   saveRDS("Data/Intermediate/IndividualInfectionModelList.rds")
 
-IM1 <- INLAModelAdd(Data = TestDF, 
-                    Family = "poisson",
+IM1 <- INLAModelAdd(Data = TestDF %>% mutate_at("MeanTime", log10), 
+                    # Family = "loggaussian",
                     Response = "MeanTime",
                     Explanatory = c("Hurricane", "Age", "Sex", "Rank"), 
                     Add = paste0("Hurricane:", c("Age", "Sex", "Rank")),
