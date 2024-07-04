@@ -64,7 +64,17 @@ for(FocalRep in Reps){
   StrengthDF <-
     Network %>% rowSums %>% data.frame %>% 
     rownames_to_column %>%
-    rename(ID = 1, Strength = 2)
+    rename(ID = 1, Strength = 2) %>% 
+    bind_cols(
+      
+      Network %>% 
+        DegreeGet %>% 
+        rowSums %>% data.frame %>% 
+        rownames_to_column %>%
+        rename(ID = 1, Degree = 2) %>% 
+        dplyr::select(Degree)
+      
+    )
   
   # }) %>% bind_cols()
   
@@ -111,4 +121,108 @@ ModelList %>% map(MCMCRep) %>% bind_rows(.id = "Model") %>%
   mutate_at("Model", ~c("ID Overall", "ID:Hurricane", "ID Before", "ID After")[as.numeric(.x)]) %>% 
   rename(Lower = lHPD, Upper = uHPD) %>% 
   write.csv("Data/Outputs/RepeatabilityValues.csv", row.names = F)
+
+ModelList %>% 
+  map(MCMCRep) %>% 
+  bind_rows(.id = "Model") %>% filter(Component != "units") %>% 
+  # mutate_at(3:5, ~round(as.numeric(.x), 2))
+  mutate_at(3:5, ~as.numeric(.x)) %>% 
+  ggplot(aes(factor(Model), Mode, 
+             fill = Component)) + 
+  geom_col(colour = "black", position = "stack") + 
+  labs(x = "Model") + 
+  theme(axis.text.x = element_text(angle = 45, 
+                                   hjust = 1)) +
+  lims(y = c(NA, 1)) +
+  geom_hline(yintercept = 1, lty = 2, alpha = 0.4) +
+  scale_x_discrete(labels = c("Overall", "ID:Hurricane", "ID Before", "ID After"))
+
+MC1 <- MCMCglmm(Degree ~ Year + Population + PostMaria, data = IDDF, random =~ ID)
+
+MC2 <- MCMCglmm(Degree ~ Year + Population + PostMaria, data = IDDF, random =~ ID + ID:PostMaria)
+
+MC3a <- MCMCglmm(Degree ~ Year + Population, # + PostMaria, 
+                 data = IDDF %>% filter(PostMaria == 0), 
+                 random =~ ID)
+
+MC3b <- MCMCglmm(Degree ~ Year + Population, # + PostMaria, 
+                 data = IDDF %>% filter(PostMaria == 1), 
+                 random =~ ID)
+
+ModelList <- list(MC1, MC2, MC3a, MC3b)
+
+ModelList %>% 
+  map(MCMCRep) %>% 
+  bind_rows(.id = "Model") %>% filter(Component != "units") %>% 
+  # mutate_at(3:5, ~round(as.numeric(.x), 2))
+  mutate_at(3:5, ~as.numeric(.x)) %>% 
+  ggplot(aes(factor(Model), Mode, 
+             fill = Component)) + 
+  geom_col(colour = "black", position = "stack") + 
+  labs(x = "Model") + 
+  theme(axis.text.x = element_text(angle = 45, 
+                                   hjust = 1)) +
+  lims(y = c(NA, 1)) +
+  geom_hline(yintercept = 1, lty = 2, alpha = 0.4) +
+  scale_x_discrete(labels = c("Overall", "ID:Hurricane", "ID Before", "ID After"))
+
+# Running raw social models ####
+
+load("Data/Intermediate/proximity_data.RData")
+
+IndividualTraits <-
+  edgelist.all %>%
+  mutate(IsPost = ifelse(year < 2018, "Pre", "Post")) %>%
+  mutate(Pop = paste0(group, year)) %>%
+  dplyr::select(ID = ID1, Sex = ID1_sex, Rank = ID1_rank, Age = ID1_age, Pop, IsPost) %>%
+  unique
+
+IndividualTraits %<>% mutate_at("Sex", ~str_replace_all(.x, "FALSE", "F"))
+
+TestDF <-
+  IndividualTraits %>% 
+  left_join(IDDF, by = c("ID", "Pop" = "Rep")) %>% 
+  na.omit
+
+TestDF %<>%
+  filter(Age > 5) %>% 
+  mutate_at("Age", ~.x/10)
+
+TestDF %<>% mutate_at(c("Strength", "Degree"), ~log(.x + 1))
+
+mdl.strength <- inla(Strength ~ IsPost * (Age + Sex + Rank) + 
+                       f(ID, model = "iid") + f(Pop, model = "iid"),
+                     # family = "poisson",
+                     control.compute = list(dic = TRUE),
+                     data = TestDF)
+
+mdl.strength <- lmer(Strength ~ IsPost * (Age + Sex + Rank) + 
+                       (1|ID) + (1|Pop),
+                     # family = "poisson",
+                     # control.compute = list(dic = TRUE),
+                     data = TestDF)
+
+mdl.strength %>% resid %>% qplot
+
+qplot(fitted(mdl.strength), resid(mdl.strength))
+
+mdl.degree <- inla(Degree ~ IsPost * (Age + Sex + Rank) + 
+                     f(ID, model = "iid") + f(Pop, model = "iid"),
+                   # family = "poisson",
+                   control.compute = list(dic = TRUE),
+                   data = TestDF)
+
+mdl.degree <- lmer(Degree ~ IsPost * (Age + Sex + Rank) + 
+                     (1|ID) + (1|Pop),
+                   # family = "poisson",
+                   # control.compute = list(dic = TRUE),
+                   data = TestDF)
+
+mdl.degree %>% resid %>% qplot
+
+qplot(fitted(mdl.degree), resid(mdl.degree))
+
+mdl.degree %>% plot
+
+
 

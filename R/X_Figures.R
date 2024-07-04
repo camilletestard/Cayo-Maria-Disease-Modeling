@@ -139,13 +139,23 @@ ggsave("Figures/Figure1.jpeg", units = "mm",
 
 individual_timestep_Allrank <- readRDS("Data/Outputs/IndividualTimestepsCamille.rds")
 
+# individual_timestep_Allrank <- 
+#   individual_timestep %>% 
+#   filter(!is.na(`rank`))
+# 
+# individual_timestep_Allrank %<>% 
+#   mutate_at("MeanTime", log10)
+
+
 ## Panel A: Table ####
 
 Model <- readRDS(file = "Data/Outputs/LevellingModel.rds")
+# Model <- readRDS(file = "Data/Outputs/LevellingMCMC.rds")
 
 write.csv(tab_model(Model), file = "ModelOutput.csv")
 
 ggsave("Figures/infection_individual_factors_table.pdf")
+
 
 ## Panel B: Rank ####
 
@@ -190,7 +200,7 @@ Segments <-
                        name = "Mean infection timestep",
                        limits = c(0, 1250)) +
     theme(strip.background = element_rect(fill = "white", colour = "dark grey")) +
-    theme(legend.position = "none"))
+    theme(legend.position = "none") + scale_y_log10())
 
 ## Panel C: Age ####
 
@@ -208,7 +218,7 @@ Segments <-
    ggpubr::stat_cor() +
    scale_colour_manual(values = ParasiteColours[c(5, 4)]) +
    theme(strip.background = element_rect(fill = "white", colour = "dark grey")) +
-   theme(legend.position = "none"))
+   theme(legend.position = "none") + scale_y_log10())
 
 ## Panel D: Sex ####
 
@@ -237,7 +247,8 @@ SexSegments <-
     geom_text(data = SexSegments, inherit.aes = F, 
               aes(y = Y, x = X, label = Label)) +
     theme(strip.background = element_rect(fill = "white", colour = "dark grey")) +
-    theme(legend.position = "none"))
+    theme(legend.position = "none") + scale_y_log10())
+
 
 ## Combining ####
 
@@ -250,7 +261,7 @@ ggsave("Figures/Figure2.jpeg", units = "mm", height = 120, width = 275)
 # Figure 3 ####
 
 xx.strength <- 
-  read.csv(file = "Results/contrasts_hurricaneRank_degree.csv")
+  read.csv(file = "Results/contrasts_hurricaneRank_strength.csv")
 
 # xxplot.strength = xx.strength[c(2,4,11,7,9,14),]; 
 

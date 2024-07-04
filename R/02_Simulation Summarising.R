@@ -76,7 +76,8 @@ if(!file.exists("Data/Output/PopulationTimeSteps.rds")){
     mutate(Population = substr(Rep, 1, 1), 
            Year = substr(Rep, 2, 5)) %>%   
     
-    mutate(PostMaria = as.factor(as.numeric(Year %in% c(2018:2021))))
+    mutate(Hurricane = factor(ifelse(Year %in% c(2018:2021), "Post", "Pre")), 
+           levels = c("Pre", "Post"))
   
   TimeStepDF %>% saveRDS("Data/Outputs/PopulationTimeSteps.rds")
   
@@ -94,7 +95,9 @@ OutputDF %<>%
   mutate(Population = substr(Rep, 1, 1), 
          Year = substr(Rep, 2, 5))
 
-OutputDF %<>% mutate(PostMaria = as.factor(as.numeric(Year %in% c(2018:2021))))
+OutputDF %<>% 
+  mutate(Hurricane = factor(ifelse(Year %in% c(2018:2021), "Post", "Pre")), 
+         levels = c("Pre", "Post"))
 
 OutputDF %<>% mutate_at(c("Mean", "Max"), ~log(.x + 1))
 
@@ -106,8 +109,8 @@ TestDF <- OutputDF %>% mutate(PI = P_I)
 
 # MCMCglmm::MCMCglmm(Y~X, data = TestDF)
 # 
-# INLA::inla(Mean ~ P_I + PostMaria + f(Rep, model = "iid"), data = TestDF)
+# INLA::inla(Mean ~ P_I + Hurricane + f(Rep, model = "iid"), data = TestDF)
 
-MCMC1 <- MCMCglmm(Mean ~ P_I + PostMaria, random =~Rep, data = TestDF)
+MCMC1 <- MCMCglmm(Mean ~ P_I + Hurricane, random =~Rep, data = TestDF)
 
 MCMC1 %>% saveRDS("Data/Outputs/EpidemiologyModel.rds")
