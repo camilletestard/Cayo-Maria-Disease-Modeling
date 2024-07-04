@@ -181,12 +181,12 @@ TestDF %<>%
   mutate(Year = substr(Pop, str_count(Pop) - 3, str_count(Pop))) %>% 
   mutate(Pop = substr(Pop, 1, 1))
 
-MC1 <- MCMCglmm(MeanTime ~ Year + Pop, # + Hurricane, 
+MC1 <- MCMCglmm(MeanTime ~ Year + Pop + Hurricane, 
                 data = TestDF, 
                 # family = "poisson",
                 random =~ ID)
 
-MC2 <- MCMCglmm(MeanTime ~ Year + Pop, # + Hurricane, 
+MC2 <- MCMCglmm(MeanTime ~ Year + Pop + Hurricane, 
                 data = TestDF, 
                 # family = "poisson",
                 random =~ ID + ID:Hurricane)
@@ -232,35 +232,35 @@ TestDF %<>% data.frame
 
 TestDF %<>% mutate_at("Pop", ~substr(.x, 1, 1))
 
-MC1 <- MCMCglmm(MeanTime ~ Hurricane * (Age + Sex + Rank), 
+MC1 <- MCMCglmm(MeanTime ~ Hurricane * (Age + Sex + Rank) + Year + Pop, 
                 data = TestDF, 
                 family = "poisson",
                 random =~ ID)
 
-MC2 <- MCMCglmm(MeanTime ~ Hurricane * (Age + Sex + Rank), 
+MC2 <- MCMCglmm(MeanTime ~ Hurricane * (Age + Sex + Rank) + Year + Pop, 
                 data = TestDF, 
                 family = "poisson",
                 random =~ ID + ID:Hurricane)
 
-MC3a <- MCMCglmm(MeanTime ~ Age + Sex + Rank, 
+MC3a <- MCMCglmm(MeanTime ~ Age + Sex + Rank + Year + Pop, 
                  data = TestDF %>% filter(Hurricane == "Pre"), 
                  family = "poisson",
                  random =~ ID)
 
-MC3b <- MCMCglmm(MeanTime ~ Age + Sex + Rank, 
+MC3b <- MCMCglmm(MeanTime ~ Age + Sex + Rank + Year + Pop, 
                  data = TestDF %>% filter(Hurricane == "Post"), 
                  family = "poisson",
                  random =~ ID)
 
 ModelList <- list(MC1, MC2, MC3a, MC3b)
 
-ModelList %>% saveRDS("Data/Intermediate/InfectionRepeatabilityModels.rds")
-
-ModelList %>% map(~MCMCRep(.x)) %>% bind_rows(.id = "Model") %>% 
-  mutate_at(3:5, ~round(as.numeric(.x), 3)) %>% 
-  mutate_at("Model", ~c("ID Overall", "ID:Hurricane", "ID Before", "ID After")[as.numeric(.x)]) %>% 
-  rename(Lower = lHPD, Upper = uHPD) %>% 
-  write.csv("Data/Outputs/InfectionRepeatabilityValues.csv", row.names = F)
+# ModelList %>% saveRDS("Data/Intermediate/InfectionRepeatabilityModels.rds")
+# 
+# ModelList %>% map(~MCMCRep(.x)) %>% bind_rows(.id = "Model") %>% 
+#   mutate_at(3:5, ~round(as.numeric(.x), 3)) %>% 
+#   mutate_at("Model", ~c("ID Overall", "ID:Hurricane", "ID Before", "ID After")[as.numeric(.x)]) %>% 
+#   rename(Lower = lHPD, Upper = uHPD) %>% 
+#   write.csv("Data/Outputs/InfectionRepeatabilityValues.csv", row.names = F)
 
 ModelList %>% 
   map(MCMCRep) %>% 
@@ -276,21 +276,6 @@ ModelList %>%
   lims(y = c(NA, 1)) +
   geom_hline(yintercept = 1, lty = 2, alpha = 0.4) +
   scale_x_discrete(labels = c("Overall", "ID:Hurricane", "ID Before", "ID After"))
-
-# One Big Model ####
-
-LMER1 <- lmer(Time ~ Hurricane * (Age + Sex + Rank) + S_I + (1|ID) + (1|Pop) + (1|Rep),
-              data = IndivDF2)
-
-LMER1 %>% summary
-
-LMER1 %>% 
-  saveRDS(file = glue::glue("Data/Intermediate/FullIndividualLMER.rds"))
-
-IM1 <- inla(Time ~ Hurricane * (Age + Sex + Rank) + S_I + f(ID, model = "iid") + f(Pop, model = "iid") + f(Rep, model = "iid"),
-            data = IndivDF2)
-
-IM1 %>% Efxplot
 
 
 # Looping through reps ####
