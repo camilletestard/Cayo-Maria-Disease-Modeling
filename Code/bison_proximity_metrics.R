@@ -43,7 +43,7 @@ groupyears = c("F2013","KK2013","F2014","HH2014","F2015","V2015","R2015","KK2015
 gy=24; node_strength_all = list(); node_degree_all = list(); density_all = list(); node_ids=list()
 
 #Set parameters
-num_iter = 10
+num_iter = 1000
 edge_thresh=0.0001
 
 for (gy in 1:length(groupyears)){ #for all group-years
