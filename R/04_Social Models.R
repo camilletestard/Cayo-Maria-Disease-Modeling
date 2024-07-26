@@ -15,6 +15,8 @@
   #For plotting
   library(ggplot2); library(sjPlot); library(sjmisc); library(cowplot)
   
+  library(fs); library(tidyverse); library(ggregplot)
+  
   theme_set(theme_cowplot())
   
   dir_create("Data/Intermediate/SocialLMER")

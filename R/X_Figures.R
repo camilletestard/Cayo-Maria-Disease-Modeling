@@ -5,6 +5,7 @@
   
   library(tidyverse); library(cowplot); library(fs); library(magrittr)
   library(patchwork); library(ggforce); library(colorspace); library(ggregplot)
+  library(MCMCglmm)
   
   theme_set(theme_cowplot())
   
@@ -137,7 +138,24 @@ ggsave("Figures/Figure1.jpeg", units = "mm",
 
 # Figure 2 ####
 
-individual_timestep_Allrank <- readRDS("Data/Outputs/IndividualTimestepsCamille.rds")
+# individual_timestep_Allrank <- readRDS("Data/Outputs/IndividualTimestepsCamille.rds")
+
+IndivDF <- readRDS("Data/Intermediate/FullIndividualInfectionData.rds")
+
+# IndivDF
+
+IndivDF %<>% 
+  mutate_at("Sex", ~substr(.x, 1, 1)) %>% 
+  filter(Age > 5) %>% 
+  filter(Time > 0) %>% 
+  mutate_at("Age", ~.x/10) %>% 
+  mutate_at("Rank", ~factor(.x, levels = c("L", "M", "H"))) %>% 
+  mutate_at("Hurricane", ~factor(.x, levels = c("Pre", "Post"))) %>% 
+  na.omit %>% 
+  group_by(ID, Pop, Sex, Rank, Age, Hurricane) %>% 
+  summarise(MeanInf = mean(Infected), 
+            MeanTime = mean(Time)) %>% 
+  ungroup
 
 # individual_timestep_Allrank <- 
 #   individual_timestep %>% 
@@ -147,78 +165,330 @@ individual_timestep_Allrank <- readRDS("Data/Outputs/IndividualTimestepsCamille.
 #   mutate_at("MeanTime", log10)
 
 
-## Panel A: Table ####
+## Panel A: Model Effects ####
 
-Model <- readRDS(file = "Data/Outputs/LevellingModel.rds")
-# Model <- readRDS(file = "Data/Outputs/LevellingMCMC.rds")
+Model1 <- readRDS("Data/Intermediate/IndividualInfectionModelAdd.rds")
 
-write.csv(tab_model(Model), file = "ModelOutput.csv")
+Model2 <- readRDS("Data/Intermediate/IndividualInfectionModelAddStrength.rds")
 
-ggsave("Figures/infection_individual_factors_table.pdf")
+# IndivDF <- Model1$Data
+
+(PanelA <- 
+    list(Model1, Model2) %>% 
+    map("FinalModel") %>% 
+    Efxplot(#VarNames = c("(((Intercept)))" = "Intercept"),
+      Intercept = F,
+      ModelNames = c("Base", "+Strength")) +
+    scale_colour_manual(values = c(AlberColours[[1]], AlberColours[[2]])) +
+    theme(legend.position = c(0.1, 0.1), legend.justification = c(0, 0)))
+
+## Group differences: Model 1 ####
+
+if(!file.exists("Data/Outputs/ComparisonDF1.csv")){
+  
+  IndivDF %<>% as.data.frame
+  
+  PredDF <- MakePredictDF(IndivDF %>% dplyr::select(-c(MeanInf, MeanTime)), 
+                          
+                          HoldNumeric = c("Age")
+                          # HoldFactor = c(#"Sex" = "F", "Pop" = "K2020",
+                          #                "ID" = "00o")
+  ) %>% 
+    expand.grid
+  
+  PredDF %<>% filter(ID %in% unique(ID)[1:2], 
+                     Pop %in% unique(Pop)[1:2])
+  
+  PredDF[,paste0("Pred.", 1:1000)] <- 
+    INLAFit(Model1$FinalModel, PredDF, 
+            FixedCovar = c("Hurricane", "Rank", "Age", "Sex", 
+                           paste0("Hurricane:", c("Rank", "Age", "Sex"))), 
+            # Return = "Matrix",
+            Draw = T, NDraw = 1000) %>% 
+    map(as.data.frame) %>% 
+    bind_rows() %>% 
+    t
+  
+  PredDF %<>% 
+    filter(ID == ID[1], Pop == Pop[1])
+  
+  LongPred <- 
+    PredDF %>% 
+    # filter(ID == ID[1], Pop == Pop[1]) %>% 
+    pivot_longer(matches("Pred"))
+  
+  i <- 1
+  
+  ComparisonDF1 <- 
+    1:1000 %>%
+    map(function(i){
+      
+      data.frame(
+        
+        PreLM = PredDF %>% filter(Hurricane == "Pre", Rank %in% c("L", "M"), 
+                                  Sex == "F") %>% 
+          dplyr::pull(paste0("Pred.", i)) %>% diff,
+        
+        PreMH = PredDF %>% filter(Hurricane == "Pre", Rank %in% c("M", "H"), 
+                                  Sex == "F") %>% 
+          dplyr::pull(paste0("Pred.", i)) %>% diff,
+        
+        PreLH = PredDF %>% filter(Hurricane == "Pre", Rank %in% c("L", "H"), 
+                                  Sex == "F") %>% 
+          dplyr::pull(paste0("Pred.", i)) %>% diff,
+        
+        PostLM = PredDF %>% filter(Hurricane == "Post", Rank %in% c("L", "M"), 
+                                   Sex == "F") %>% 
+          dplyr::pull(paste0("Pred.", i)) %>% diff,
+        
+        PostMH = PredDF %>% filter(Hurricane == "Post", Rank %in% c("M", "H"), 
+                                   Sex == "F") %>% 
+          dplyr::pull(paste0("Pred.", i)) %>% diff,
+        
+        PostLH = PredDF %>% filter(Hurricane == "Post", Rank %in% c("L", "H"), 
+                                   Sex == "F") %>% 
+          dplyr::pull(paste0("Pred.", i)) %>% diff,
+        
+        PreFM = PredDF %>% filter(Hurricane == "Pre", Rank %in% c("M")) %>% 
+          dplyr::pull(paste0("Pred.", i)) %>% diff,
+        
+        PostFM = PredDF %>% filter(Hurricane == "Post", Rank %in% c("M")) %>% 
+          dplyr::pull(paste0("Pred.", i)) %>% diff
+        
+      )
+      
+    }) %>% 
+    bind_rows(.id = "Rep")
+  
+  ComparisonDF1 %>% write.csv("Data/Outputs/ComparisonDF1.csv", row.names = F)
+  
+}else ComparisonDF1 <- read.csv("Data/Outputs/ComparisonDF2.csv")
+
+(Model1ComparisonPanel <- 
+    ComparisonDF1 %>% 
+    pivot_longer(-Rep) %>% 
+    group_by(name) %>% 
+    summarise(Mean = mean(value), 
+              Lower = HPDinterval(as.mcmc(value))[1], 
+              Upper = HPDinterval(as.mcmc(value))[2]) %>% 
+    mutate(Hurricane = ifelse(str_detect(name, "Pre"), "Pre", "Post")) %>% 
+    mutate(Comparison = substr(name, nchar(name)-1, nchar(name))) %>% 
+    
+    mutate_at("Hurricane", ~factor(.x, levels = c("Pre", "Post"))) %>% 
+    mutate(Prefix = rep(c("Sex: ", rep("Rank: ", 3)), 2)) %>% 
+    mutate_at("Comparison", ~factor(paste0(Prefix, .x), 
+                                    levels = rev(c("Sex: FM", "Rank: LM", "Rank: LH", "Rank: MH")))) %>% 
+    
+    ggplot(aes(Comparison, Mean, colour = Hurricane)) +
+    geom_point(colour = "black", 
+               aes(group = Hurricane), 
+               size = 2.5, 
+               position = position_dodge(w = 0.7)) + 
+    geom_point(position = position_dodge(w = 0.7)) + 
+    geom_hline(yintercept = 0, lty = 2, alpha = 0.3) +
+    geom_errorbar(position = position_dodge(w = 0.7),
+                  aes(ymin = Lower, ymax = Upper), 
+                  width = 0.3) +
+    coord_flip() +
+    theme(legend.position = c(0.9, 0.3), legend.justification = c(1, 0)) +
+    scale_colour_manual(values = ParasiteColours[c(5, 4)]))
+
+# ggsave("Figures/Figure3.jpeg", units = "mm", height = 120, width = 120)
+
+## Group differences: Model 2 ####
+
+if(!file.exists("Data/Outputs/ComparisonDF2.csv")){
+  
+  IndivDF %<>% as.data.frame
+  
+  PredDF <- MakePredictDF(IndivDF %>% dplyr::select(-c(MeanInf, MeanTime)), 
+                          
+                          HoldNumeric = c("Age", "Strength")
+                          # HoldFactor = c(#"Sex" = "F", "Pop" = "K2020",
+                          #                "ID" = "00o")
+  ) %>% 
+    expand.grid
+  
+  PredDF %<>% filter(ID %in% unique(ID)[1:2], 
+                     Pop %in% unique(Pop)[1:2])
+  
+  PredDF[,paste0("Pred.", 1:1000)] <- 
+    INLAFit(Model2$FinalModel, PredDF, 
+            FixedCovar = c("Hurricane", "Rank", "Age", "Sex", 
+                           paste0("Hurricane:", c("Rank", "Age", "Sex"))), 
+            # Return = "Matrix",
+            Draw = T, NDraw = 1000) %>% 
+    map(as.data.frame) %>% 
+    bind_rows() %>% 
+    t
+  
+  PredDF %<>% 
+    filter(ID == ID[1], Pop == Pop[1])
+  
+  LongPred <- 
+    PredDF %>% 
+    # filter(ID == ID[1], Pop == Pop[1]) %>% 
+    pivot_longer(matches("Pred"))
+  
+  i <- 1
+  
+  ComparisonDF2 <- 
+    1:1000 %>%
+    map(function(i){
+      
+      data.frame(
+        
+        PreLM = PredDF %>% filter(Hurricane == "Pre", Rank %in% c("L", "M"), 
+                                  Sex == "F") %>% 
+          dplyr::pull(paste0("Pred.", i)) %>% diff,
+        
+        PreMH = PredDF %>% filter(Hurricane == "Pre", Rank %in% c("M", "H"), 
+                                  Sex == "F") %>% 
+          dplyr::pull(paste0("Pred.", i)) %>% diff,
+        
+        PreLH = PredDF %>% filter(Hurricane == "Pre", Rank %in% c("L", "H"), 
+                                  Sex == "F") %>% 
+          dplyr::pull(paste0("Pred.", i)) %>% diff,
+        
+        PostLM = PredDF %>% filter(Hurricane == "Post", Rank %in% c("L", "M"), 
+                                   Sex == "F") %>% 
+          dplyr::pull(paste0("Pred.", i)) %>% diff,
+        
+        PostMH = PredDF %>% filter(Hurricane == "Post", Rank %in% c("M", "H"), 
+                                   Sex == "F") %>% 
+          dplyr::pull(paste0("Pred.", i)) %>% diff,
+        
+        PostLH = PredDF %>% filter(Hurricane == "Post", Rank %in% c("L", "H"), 
+                                   Sex == "F") %>% 
+          dplyr::pull(paste0("Pred.", i)) %>% diff,
+        
+        PreFM = PredDF %>% filter(Hurricane == "Pre", Rank %in% c("M")) %>% 
+          dplyr::pull(paste0("Pred.", i)) %>% diff,
+        
+        PostFM = PredDF %>% filter(Hurricane == "Post", Rank %in% c("M")) %>% 
+          dplyr::pull(paste0("Pred.", i)) %>% diff
+        
+      )
+      
+    }) %>% 
+    bind_rows(.id = "Rep")
+  
+  ComparisonDF2 %>% write.csv("Data/Outputs/ComparisonDF2.csv", row.names = F)
+  
+}else ComparisonDF2 <- read.csv("Data/Outputs/ComparisonDF2.csv")
+
+(Model2ComparisonPanel <- 
+    ComparisonDF2 %>% 
+    pivot_longer(-Rep) %>% 
+    group_by(name) %>% 
+    summarise(Mean = mean(value), 
+              Lower = HPDinterval(as.mcmc(value))[1], 
+              Upper = HPDinterval(as.mcmc(value))[2]) %>% 
+    mutate(Hurricane = ifelse(str_detect(name, "Pre"), "Pre", "Post")) %>% 
+    mutate(Comparison = substr(name, nchar(name)-1, nchar(name))) %>% 
+    
+    mutate_at("Hurricane", ~factor(.x, levels = c("Pre", "Post"))) %>% 
+    mutate(Prefix = rep(c("Sex: ", rep("Rank: ", 3)), 2)) %>% 
+    mutate_at("Comparison", ~factor(paste0(Prefix, .x), 
+                                    levels = rev(c("Sex: FM", "Rank: LM", "Rank: LH", "Rank: MH")))) %>% 
+    ggplot(aes(Comparison, Mean, colour = Hurricane)) +
+    geom_point(position = position_dodge(w = 0.7)) + 
+    geom_hline(yintercept = 0, lty = 2, alpha = 0.3) +
+    geom_errorbar(position = position_dodge(w = 0.7),
+                  aes(ymin = Lower, ymax = Upper), 
+                  width = 0.3) +
+    coord_flip() +
+    scale_colour_manual(values = ParasiteColours[c(5, 4)]))
 
 
 ## Panel B: Rank ####
 
-individual_timestep_Allrank %<>% 
-  mutate_at("isPost", as.character) %>%
-  mutate_at("isPost", ~factor(CamelConvert(.x), levels = c("Pre", "Post"))) %>% 
-  filter(!is.na(rank))
+ComparisonDF1 %>% 
+  summarise_at(2:ncol(.), 
+               function(a){
+                 
+                 1-abs(500-sum(abs(diff(table(a>0)))))/500
+                 
+                 
+               })
+
+# individual_timestep_Allrank %<>% 
+#   mutate_at("isPost", as.character) %>%
+#   mutate_at("isPost", ~factor(CamelConvert(.x), levels = c("Pre", "Post"))) %>% 
+#   filter(!is.na(rank))
 
 # individual_timestep_Allrank = individual_timestep[!is.na(individual_timestep$rank),]
 
-individual_timestep_Allrank$rank = factor(individual_timestep_Allrank$rank, levels = c("L", "M", "H"))
+# individual_timestep_Allrank$rank = 
+#   factor(individual_timestep_Allrank$rank, levels = c("L", "M", "H"))
+
+# individual_timestep_Allrank
 
 Segments <- 
-  data.frame(YFrom = c(1200, 1100, 1100)) %>% 
+  data.frame(YFrom = c(1200, 1000, 1000)) %>% 
   mutate(YTo = YFrom, XFrom = c(1.1, 1.1, 2.1)) %>% 
-  mutate(XTo = c(2.9, 1.9, 2.9), Label = rep("***")) %>% 
+  mutate(XTo = c(2.9, 1.9, 2.9), Label = c("***", "***", "NS")) %>% 
   mutate(X = (XFrom + XTo)/2) %>% 
-  mutate(isPost = "Pre") %>% 
-  mutate(Y = YFrom + 25) %>% 
+  mutate(Hurricane = "Pre") %>% 
+  mutate(Y = c(1200 + 25, 1000 + 25, 1000 + 85)) %>% 
   bind_rows(
-    data.frame(YFrom = c(1200, 1100, 1100)) %>% 
+    data.frame(YFrom = c(1200, 1000, 1000)) %>% 
       mutate(YTo = YFrom, XFrom = c(1.1, 1.1, 2.1)) %>% 
-      mutate(XTo = c(2.9, 1.9, 2.9), Label = c("*", "NS", "NS")) %>% 
+      mutate(XTo = c(2.9, 1.9, 2.9), Label = c("***", "***", "NS")) %>% 
       mutate(X = (XFrom + XTo)/2) %>% 
-      mutate(Y = c(1200 + 25, 1100 + 50, 1100 + 50)) %>% 
-      mutate(isPost = "Post")) %>% 
-  mutate_at("isPost", ~factor(.x, levels = c("Pre", "Post")))
+      mutate(Y = c(1200 + 25, 1000 + 25, 1000 + 85)) %>% 
+      mutate(Hurricane = "Post")) %>% 
+  mutate_at("Hurricane", ~factor(.x, levels = c("Pre", "Post")))# %>% 
+# mutate_at(vars(matches("Y")), log10)
 
 (PanelB <- 
-    ggplot(individual_timestep_Allrank) +
+    ggplot(IndivDF) +
     # geom_violin() +
-    geom_sina(alpha = 0.1, aes(colour = isPost, x = rank, y = MeanTime)) +
-    geom_boxplot(aes(x = rank, y = MeanTime), width = 0.2, outliers = F) +
-    facet_grid(~isPost) +
-    geom_segment(data = Segments, #inherit.aes = F, 
-                 aes(y = YFrom, yend = YTo, 
+    geom_sina(alpha = 0.1, aes(colour = Hurricane, x = Rank, y = MeanTime)) +
+    geom_boxplot(aes(x = Rank, y = MeanTime), width = 0.2, outliers = F) +
+    facet_grid(~Hurricane) +
+    geom_segment(data = Segments, #inherit.aes = F,
+                 aes(y = YFrom, yend = YTo,
+                     colour = Hurricane,
                      x = XFrom, xend = XTo)) +
-    geom_text(data = Segments, inherit.aes = F, 
-              aes(y = Y, x = X, label = Label)) +
+    geom_text(data = Segments, inherit.aes = F,
+              aes(y = Y, x = X, 
+                  colour = Hurricane,
+                  label = Label)) +
     scale_colour_manual(values = ParasiteColours[c(5, 4)]) +
-    scale_y_continuous(breaks = c(0:5*250), 
-                       name = "Mean infection timestep",
-                       limits = c(0, 1250)) +
-    theme(strip.background = element_rect(fill = "white", colour = "dark grey")) +
-    theme(legend.position = "none") + scale_y_log10())
+    # scale_y_continuous(breaks = c(0:5*250), 
+    #                    name = "Mean infection timestep",
+    #                    limits = c(0, 1250)
+    # ) +
+    theme(strip.background = element_rect(fill = "white", #colour = "dark grey",
+                                          colour = "white")) +
+    theme(legend.position = "none") + scale_y_log10(breaks = 2^(1:10), 
+                                                    name = "Mean infection timestep",
+                                                    limits = c(30, 1250))
+)
 
 ## Panel C: Age ####
 
 (PanelC <-
-   individual_timestep_Allrank %>% 
-   ggplot(aes(x = age, y = MeanTime)) +
+   IndivDF %>% 
+   ggplot(aes(x = Age, y = MeanTime)) +
    # geom_jitter(alpha = 0.3, aes(colour = isPost))+
-   geom_point(alpha = 0.1, aes(colour = isPost))+
+   geom_point(alpha = 0.1, aes(colour = Hurricane))+
    geom_smooth(method = "lm", colour = "black")+
-   facet_grid(~isPost)+
-   scale_y_continuous(breaks = c(0:5*250), 
-                      limits = c(0, 1250),
-                      labels = NULL,
-                      name = NULL) +
+   facet_grid(~Hurricane) +
+   scale_x_continuous(breaks = c(0:6/2), labels = c(0:6*5)) +
+   # scale_y_continuous(breaks = c(0:5*250), 
+   #                    limits = c(0, 1250),
+   #                    labels = NULL,
+   #                    name = NULL) +
    ggpubr::stat_cor() +
    scale_colour_manual(values = ParasiteColours[c(5, 4)]) +
-   theme(strip.background = element_rect(fill = "white", colour = "dark grey")) +
-   theme(legend.position = "none") + scale_y_log10())
+   theme(strip.background = element_rect(fill = "white", #colour = "dark grey",
+                                         colour = "white")) +
+   theme(legend.position = "none") + scale_y_log10(breaks = 2^(1:10), 
+                                                   limits = c(30, 1250),
+                                                   labels = NULL,
+                                                   name = NULL))
 
 ## Panel D: Sex ####
 
@@ -229,13 +499,14 @@ SexSegments <-
   mutate(X = (XFrom + XTo)/2) %>% 
   mutate(isPost = c("Pre", "Post")) %>% 
   mutate(Y = YFrom + 25) %>% 
-  mutate_at("isPost", ~factor(.x, levels = c("Pre", "Post")))
+  mutate_at("isPost", ~factor(.x, levels = c("Pre", "Post"))) %>% 
+  rename(Hurricane = isPost)
 
 (PanelD <- 
-    ggplot(individual_timestep_Allrank, aes(x = sex, y = MeanTime))+
-    geom_sina(alpha = 0.1, aes(colour = isPost)) +
+    ggplot(IndivDF, aes(x = Sex, y = MeanTime))+
+    geom_sina(alpha = 0.1, aes(colour = Hurricane)) +
     geom_boxplot(width = 0.2, outliers = F) +
-    facet_grid(~isPost) +
+    facet_grid(~Hurricane) +
     scale_colour_manual(values = ParasiteColours[c(5, 4)]) +
     scale_y_continuous(breaks = c(0:5*250), 
                        limits = c(0, 1250),
@@ -243,20 +514,28 @@ SexSegments <-
                        name = NULL) +
     geom_segment(data = SexSegments, #inherit.aes = F, 
                  aes(y = YFrom, yend = YTo, 
+                     colour = Hurricane,
                      x = XFrom, xend = XTo)) +
     geom_text(data = SexSegments, inherit.aes = F, 
-              aes(y = Y, x = X, label = Label)) +
-    theme(strip.background = element_rect(fill = "white", colour = "dark grey")) +
-    theme(legend.position = "none") + scale_y_log10())
+              aes(y = Y, x = X,
+                  colour = Hurricane,
+                  label = Label)) +
+    theme(strip.background = element_rect(fill = "white", #colour = "dark grey",
+                                          colour = "white")) +
+    theme(legend.position = "none") + scale_y_log10(breaks = 2^(1:10), 
+                                                    limits = c(30, 1250),
+                                                    labels = NULL,
+                                                    name = NULL))
 
 
 ## Combining ####
 
-# tab_model(mdl)/
-(PanelB|PanelC|PanelD) + 
-  plot_annotation(tag_levels = "A")
+PanelA/
+  (PanelB + theme(axis.title.y = element_text(vjust = -30))|PanelC|PanelD) + 
+  plot_annotation(tag_levels = "A") +
+  plot_layout(heights = c(1, 1.5))
 
-ggsave("Figures/Figure2.jpeg", units = "mm", height = 120, width = 275)
+ggsave("Figures/Figure2.jpeg", units = "mm", height = 200, width = 300)
 
 # Figure 3 ####
 
@@ -330,6 +609,8 @@ ggsave("Figures/Figure3.jpeg", units = "mm",
 
 
 # Repeatability Figures ####
+
+ModelList <- readRDS("Data/Intermediate/InfectionRepeatabilityModels.rds")
 
 ModelList %>% 
   map(MCMCRep) %>% 
