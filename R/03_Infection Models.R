@@ -71,6 +71,7 @@ if(!file.exists("Data/Intermediate/FullIndividualInfectionData.rds")){
   
   IndividualTraits <- 
     TraitList %>% map(~.x %>% 
+                        rename_all(~str_replace(.x, "dominant", "dominat")) %>% 
                         mutate_at("sex", ~substr(as.character(.x), 1, 1)) %>% # Some sex columns are logical
                         mutate_at(vars(matches("idcode")), as.character)) %>% # Some csvs don't include this column, some are numeric
     bind_rows(.id = "Pop") %>% 
@@ -82,7 +83,10 @@ if(!file.exists("Data/Intermediate/FullIndividualInfectionData.rds")){
                               levels = c("Pre", "Post")))
   
   IndivDF %<>% left_join(IndividualTraits %>% 
-                           dplyr::select(ID = Id, Pop, Hurricane, Sex, Age, Rank = Ordinal.rank) %>% 
+                           dplyr::select(ID = Id, Pop, Hurricane, 
+                                         # Rank = Ordinal.rank, 
+                                         Rank = Percofsex.dominated, 
+                                         Sex, Age) %>% 
                            unique)
   
   IndivDF %>% saveRDS("Data/Intermediate/FullIndividualInfectionData.rds")
@@ -119,10 +123,12 @@ TestDF <-
   filter(Age > 5) %>% 
   filter(Time > 0) %>% 
   mutate_at("Age", ~.x/10) %>% 
-  mutate_at("Rank", ~factor(.x, levels = c("L", "M", "H"))) %>% 
+  # mutate_at("RankNumeric", ~factor(.x, levels = c("L", "M", "H"))) %>%
+  mutate_at("Rank", ~.x/100) %>%
   mutate_at("Hurricane", ~factor(.x, levels = c("Pre", "Post"))) %>% 
   na.omit %>% 
-  group_by(ID, Pop, Sex, Rank, Age, Hurricane) %>% 
+  group_by(ID, Pop, Sex, Rank, #RankNumeric, 
+           Age, Hurricane) %>% 
   summarise(MeanInf = mean(Infected), 
             N = n(),
             MeanTime = mean(Time)) %>% 
@@ -163,9 +169,9 @@ INLANB <- inla(MeanTime ~ Hurricane * (Age + Sex + Rank) +
 
 list(INLAGaussian, 
      INLALogGaussian, INLAGamma, INLACount, INLANB) %>% INLADICFig() +
-
-(list(#INLAGaussian, 
-  INLALogGaussian, INLAGamma, INLACount, INLANB) %>% Efxplot(Intercept = F))
+  
+  (list(#INLAGaussian, 
+    INLALogGaussian, INLAGamma, INLACount, INLANB) %>% Efxplot(Intercept = F))
 
 list(INLAGaussian, INLALogGaussian, INLAGamma, INLACount, INLANB) %>% MDIC
 
@@ -177,6 +183,8 @@ IM1 <- INLAModelAdd(Data = TestDF %>% mutate_at("MeanTime", log10),
                     Response = "MeanTime",
                     Explanatory = c("Hurricane", "Age", "Sex", "Rank"), 
                     Add = paste0("Hurricane:", c("Age", "Sex", "Rank")),
+                    # Add = c("Rank", "RankNumeric"),
+                    # Clashes = list(c("Rank", "RankNumeric")),
                     Delta = -Inf,
                     AllModels = T,
                     Random = c("ID", "Pop"), RandomModel = "iid"
@@ -209,8 +217,8 @@ TestDF2 <-
        Strengths,
        Degrees) %>%
   reduce(~left_join(.x, .y, by = c("ID", "Pop"))) %>% 
-  na.omit %>% 
-  mutate_at("Rank", ~factor(.x, levels = c("L", "M", "H")))
+  na.omit #%>% 
+  # mutate_at("Rank", ~factor(.x, levels = c("L", "M", "H")))
 
 TestDF2 %<>%
   filter(Age > 0.5)
@@ -244,7 +252,8 @@ TestDF <-
   filter(Age > 5) %>% 
   filter(Time > 0) %>% 
   mutate_at("Age", ~.x/10) %>% 
-  mutate_at("Rank", ~factor(.x, levels = c("L", "M", "H"))) %>% 
+  # mutate_at("Rank", ~factor(.x, levels = c("L", "M", "H"))) %>% 
+  mutate_at("Rank", ~.x/100) %>% 
   mutate_at("Hurricane", ~factor(.x, levels = c("Pre", "Post"))) %>% 
   na.omit %>% 
   group_by(ID, Pop, Sex, Rank, Age, Hurricane) %>% 
@@ -291,6 +300,85 @@ ModelList %>% map(~MCMCRep(.x)) %>% bind_rows(.id = "Model") %>%
   rename(Lower = lHPD, Upper = uHPD) %>% 
   write.csv("Data/Outputs/InfectionRepeatabilityValues.csv", row.names = F)
 
+# Employing numerical rank ####
+
+TestDF <- 
+  IndivDF %>% 
+  mutate_at("Sex", ~substr(.x, 1, 1)) %>% 
+  filter(Age > 5) %>% 
+  filter(Time > 0) %>% 
+  mutate_at("Age", ~.x/10) %>% 
+  # mutate_at("Rank", ~factor(.x, levels = c("L", "M", "H"))) %>% 
+  # mutate_at("RankNumeric", ~.x/100) %>% 
+  mutate_at("Hurricane", ~factor(.x, levels = c("Pre", "Post"))) %>% 
+  na.omit %>% 
+  group_by(ID, Pop, Sex, RankNumeric, Age, Hurricane) %>% 
+  summarise(MeanInf = mean(Infected), 
+            N = n(),
+            MeanTime = mean(Time)) %>% 
+  ungroup
+
+TestDF %<>% mutate_at("MeanTime", round)
+
+INLAGaussian <- inla(MeanTime ~ Hurricane * (Age + Sex + RankNumeric) + 
+                       f(ID, model = "iid") + f(Pop, model = "iid"),
+                     # family = "poisson",
+                     control.compute = list(dic = TRUE),
+                     data = TestDF)
+
+INLALogGaussian <- inla(MeanTime ~ Hurricane * (Age + Sex + RankNumeric) + 
+                          f(ID, model = "iid") + f(Pop, model = "iid"),
+                        # family = "poisson",
+                        family = "lognormal",
+                        control.compute = list(dic = TRUE),
+                        data = TestDF)
+
+INLACount <- inla(MeanTime ~ Hurricane * (Age + Sex + RankNumeric) + 
+                    f(ID, model = "iid") + f(Pop, model = "iid"),
+                  family = "poisson",
+                  control.compute = list(dic = TRUE),
+                  data = TestDF)
+
+INLAGamma <- inla(MeanTime ~ Hurricane * (Age + Sex + RankNumeric) + 
+                    f(ID, model = "iid") + f(Pop, model = "iid"),
+                  family = "gamma",
+                  control.compute = list(dic = TRUE),
+                  data = TestDF)
+
+INLANB <- inla(MeanTime ~ Hurricane * (Age + Sex + RankNumeric) + 
+                 f(ID, model = "iid") + f(Pop, model = "iid"),
+               family = "nbinomial",
+               control.compute = list(dic = TRUE),
+               data = TestDF)
+
+list(INLAGaussian, 
+     INLALogGaussian, INLAGamma, INLACount, INLANB) %>% INLADICFig() +
+  
+  (list(#INLAGaussian, 
+    INLALogGaussian, INLAGamma, INLACount, INLANB) %>% Efxplot(Intercept = F))
+
+list(INLAGaussian, INLALogGaussian, INLAGamma, INLACount, INLANB) %>% MDIC
+
+list(INLAGaussian, INLALogGaussian, INLAGamma, INLACount, INLANB) %>% 
+  saveRDS("Data/Intermediate/IndividualInfectionModelList.rds")
+
+IM1 <- INLAModelAdd(Data = TestDF %>% mutate_at("MeanTime", log10), 
+                    # Family = "loggaussian",
+                    Response = "MeanTime",
+                    Explanatory = c("Hurricane", "Age", "Sex", "Rank"), 
+                    Add = paste0("Hurricane:", c("Age", "Sex", "Rank")),
+                    Delta = -Inf,
+                    AllModels = T,
+                    Random = c("ID", "Pop"), RandomModel = "iid"
+)
+
+IM1 %>% saveRDS("Data/Intermediate/IndividualInfectionModelAdd.rds")
+
+IM1$FinalModel %>% Efxplot(Intercept = F)
+
+IM1$AllModels[[2]] %>% Efxplot(Intercept = F)
+
+IM1$dDIC
 
 # XXXXXXXXX_Now Defunct ####
 

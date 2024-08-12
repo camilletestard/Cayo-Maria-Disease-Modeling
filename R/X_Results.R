@@ -24,7 +24,8 @@ IndivDF %<>%
   filter(Age > 5) %>% 
   filter(Time > 0) %>% 
   mutate_at("Age", ~.x/10) %>% 
-  mutate_at("Rank", ~factor(.x, levels = c("L", "M", "H"))) %>% 
+  # mutate_at("Rank", ~factor(.x, levels = c("L", "M", "H"))) %>% 
+  mutate_at("Rank", ~.x/100) %>% 
   mutate_at("Hurricane", ~factor(.x, levels = c("Pre", "Post"))) %>% 
   na.omit %>% 
   group_by(ID, Pop, Sex, Rank, Age, Hurricane) %>% 
@@ -75,11 +76,14 @@ Model2$FinalModel %>% INLAPValue("HurricanePost:Age")
 # lower-rank individuals were slower to get infected than 
 # medium- (XXX, CI, P) and high-rank individuals (XXX, CI, P, Figure 2A-B).
 
-Model1$FinalModel %>% GetEstimates("RankM")
-Model1$FinalModel %>% INLAPValue("RankM")
+# Model1$FinalModel %>% GetEstimates("RankM")
+# Model1$FinalModel %>% INLAPValue("RankM")
+# 
+# Model1$FinalModel %>% GetEstimates("RankH")
+# Model1$FinalModel %>% INLAPValue("RankH")
 
-Model1$FinalModel %>% GetEstimates("RankH")
-Model1$FinalModel %>% INLAPValue("RankH")
+Model1$FinalModel %>% GetEstimates("Rank")
+Model1$FinalModel %>% INLAPValue("Rank")
 
 # Connection strength had a strong accelerating effect on infection timestep 
 # when included as an explanatory variable (Figure 2A): 

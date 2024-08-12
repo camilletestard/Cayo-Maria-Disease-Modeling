@@ -149,7 +149,8 @@ IndivDF %<>%
   filter(Age > 5) %>% 
   filter(Time > 0) %>% 
   mutate_at("Age", ~.x/10) %>% 
-  mutate_at("Rank", ~factor(.x, levels = c("L", "M", "H"))) %>% 
+  # mutate_at("Rank", ~factor(.x, levels = c("L", "M", "H"))) %>% 
+  mutate_at("Rank", ~.x/100) %>%
   mutate_at("Hurricane", ~factor(.x, levels = c("Pre", "Post"))) %>% 
   na.omit %>% 
   group_by(ID, Pop, Sex, Rank, Age, Hurricane) %>% 
@@ -466,6 +467,27 @@ Segments <-
                                                     name = "Mean infection timestep",
                                                     limits = c(30, 1250))
 )
+
+(PanelB <-
+    IndivDF %>% 
+    ggplot(aes(x = Rank, y = MeanTime)) +
+    # geom_jitter(alpha = 0.3, aes(colour = isPost))+
+    geom_point(alpha = 0.1, aes(colour = Hurricane))+
+    geom_smooth(method = "lm", colour = "black")+
+    # facet_grid(~Hurricane) +
+    scale_x_continuous(breaks = c(0:6/2), labels = c(0:6*5)) +
+    # scale_y_continuous(breaks = c(0:5*250), 
+    #                    limits = c(0, 1250),
+    #                    labels = NULL,
+    #                    name = NULL) +
+    ggpubr::stat_cor() +
+    scale_colour_manual(values = ParasiteColours[c(5, 4)]) +
+    theme(strip.background = element_rect(fill = "white", #colour = "dark grey",
+                                          colour = "white")) +
+    labs(x = "Proportion dominant interactions") +
+    theme(legend.position = "none") + scale_y_log10(breaks = 2^(1:10), 
+                                                    name = "Mean infection timestep",
+                                                    limits = c(30, 1250)))
 
 ## Panel C: Age ####
 
