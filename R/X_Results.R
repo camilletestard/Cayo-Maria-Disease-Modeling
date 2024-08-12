@@ -11,6 +11,8 @@
   
   dir_create("Figures")
   
+  ReportRep <- function(a) paste0(a$Mode, " (", a$lHPD, ", ", a$uHPD, ")")
+  
 }
 
 # Inequalities in disease risk were exacerbated after Hurricane Maria
@@ -73,8 +75,7 @@ Model2$FinalModel %>% GetEstimates("HurricanePost:Age")
 Model2$FinalModel %>% INLAPValue("HurricanePost:Age")
 
 # In contrast, there were strong differences in epidemic risk among individuals of different ranks, which did not change following the hurricane: 
-# lower-rank individuals were slower to get infected than 
-# medium- (XXX, CI, P) and high-rank individuals (XXX, CI, P, Figure 2A-B).
+# (XXX, CI, P, Figure 2A-B).
 
 # Model1$FinalModel %>% GetEstimates("RankM")
 # Model1$FinalModel %>% INLAPValue("RankM")

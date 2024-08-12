@@ -806,3 +806,20 @@ GraphList[Samples] %>%
       coord_fixed()
     
   }) %>% ArrangeCowplot()
+
+# Supplementary tables ####
+
+Model1$FinalModel$summary.fixed %>% 
+  as.data.frame %>% 
+  dplyr::select(Estimate = mean, Lower = `0.025quant`, Upper = `0.975quant`) %>% 
+  rownames_to_column(var = "Variable") %>% 
+  write.csv("Figures/Model1Estimates.csv", row.names = F)
+
+Model2$FinalModel$summary.fixed %>% 
+  as.data.frame %>% 
+  dplyr::select(Estimate = mean, Lower = `0.025quant`, Upper = `0.975quant`) %>% 
+  rownames_to_column(var = "Variable") %>% 
+  write.csv("Figures/Model2Estimates.csv", row.names = F)
+
+
+
