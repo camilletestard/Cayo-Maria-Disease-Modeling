@@ -178,7 +178,7 @@ list(INLAGaussian, INLALogGaussian, INLAGamma, INLACount, INLANB) %>% MDIC
 list(INLAGaussian, INLALogGaussian, INLAGamma, INLACount, INLANB) %>% 
   saveRDS("Data/Intermediate/IndividualInfectionModelList.rds")
 
-IM1 <- INLAModelAdd(Data = TestDF %>% mutate_at("MeanTime", log10), 
+IM1 <- INLAModelAdd(Data = TestDF %>% mutate_at("MeanTime", log), 
                     # Family = "loggaussian",
                     Response = "MeanTime",
                     Explanatory = c("Hurricane", "Age", "Sex", "Rank"), 
@@ -595,3 +595,138 @@ MCMCEstimates %>%
              aes(x = Var, y = Mean),
              colour = "black") +
   coord_flip()
+
+
+# Repeatability of rank ####
+
+TestDF <- 
+  IndivDF %>% 
+  mutate_at("Sex", ~substr(.x, 1, 1)) %>% 
+  filter(Age > 5) %>% 
+  filter(Time > 0) %>% 
+  mutate_at("Age", ~.x/10) %>% 
+  # mutate_at("Rank", ~factor(.x, levels = c("L", "M", "H"))) %>% 
+  mutate_at("Rank", ~.x/100) %>% 
+  mutate_at("Hurricane", ~factor(.x, levels = c("Pre", "Post"))) %>% 
+  na.omit %>% 
+  group_by(ID, Pop, Sex, Rank, Age, Hurricane) %>% 
+  summarise(MeanInf = mean(Infected), 
+            N = n(),
+            MeanTime = mean(Time)) %>% 
+  ungroup
+
+# TestDF %<>% mutate_at("MeanTime", round)
+
+TestDF3 <- TestDF %>% data.frame# %>% mutate_at("MeanTime", log10)
+
+TestDF3 %<>% 
+  mutate(Year = substr(Pop, str_count(Pop) - 3, str_count(Pop))) %>% 
+  mutate(Pop = substr(Pop, 1, 1))
+
+MC1 <- MCMCglmm(Rank ~ Year + Pop + Hurricane, 
+                data = TestDF3, 
+                # family = "poisson",
+                random =~ ID)
+
+MC2 <- MCMCglmm(Rank ~ Year + Pop + Hurricane, 
+                data = TestDF3, 
+                # family = "poisson",
+                random =~ ID + ID:Hurricane)
+
+MC3a <- MCMCglmm(Rank ~ Year + Pop, 
+                 data = TestDF3 %>% filter(Hurricane == "Pre"), 
+                 # family = "poisson",
+                 random =~ ID)
+
+MC3b <- MCMCglmm(Rank ~ Year + Pop, 
+                 data = TestDF3 %>% filter(Hurricane == "Post"), 
+                 # family = "poisson",
+                 random =~ ID)
+
+ModelList <- list(MC1, MC2, MC3a, MC3b)
+
+# ModelList %>% saveRDS("Data/Intermediate/InfectionRepeatabilityModels.rds")
+
+ModelList %>% map(~MCMCRep(.x)) %>% bind_rows(.id = "Model") %>% 
+  mutate_at(3:5, ~round(as.numeric(.x), 3)) %>% 
+  mutate_at("Model", ~c("ID Overall", "ID:Hurricane", "ID Before", "ID After")[as.numeric(.x)]) %>% 
+  rename(Lower = lHPD, Upper = uHPD)
+
+ModelList %>% 
+  map(MCMCRep) %>% 
+  bind_rows(.id = "Model") %>% filter(Component != "units") %>% 
+  # mutate_at(3:5, ~round(as.numeric(.x), 2))
+  mutate_at(3:5, ~as.numeric(.x)) %>% 
+  ggplot(aes(factor(Model), Mode, 
+             fill = Component)) + 
+  geom_col(colour = "black", position = "stack") + 
+  labs(x = "Model") + 
+  theme(axis.text.x = element_text(angle = 45, 
+                                   hjust = 1)) +
+  lims(y = c(NA, 1)) +
+  geom_hline(yintercept = 1, lty = 2, alpha = 0.4) +
+  scale_x_discrete(labels = c("Overall", "ID:Hurricane", "ID Before", "ID After"))
+
+# Repeatability of Strength ####
+
+load("Data/Intermediate/BisonMetrics.RData")
+
+Strengths <-
+  node_strength_all %>% map(colMeans) %>% map(c(reshape2::melt, rownames_to_column)) %>%
+  bind_rows(.id = "Pop") %>%
+  rename(ID = rowname, Strength = value)
+
+TestDF2 <-
+  list(TestDF,
+       Strengths) %>%
+  reduce(~left_join(.x, .y, by = c("ID", "Pop"))) %>% 
+  na.omit %>% data.frame #%>% 
+# mutate_at("Rank", ~factor(.x, levels = c("L", "M", "H")))
+
+TestDF2 %<>%
+  filter(Age > 0.5)
+
+TestDF2 %<>% mutate_at("Strength", log)
+
+TestDF2 %<>% 
+  mutate(Year = substr(Pop, str_count(Pop) - 3, str_count(Pop))) %>% 
+  mutate(Pop = substr(Pop, 1, 1))
+
+MC1 <- MCMCglmm(Strength ~ Year + Pop + Hurricane, 
+                data = TestDF2, 
+                # family = "poisson",
+                random =~ ID)
+
+MC2 <- MCMCglmm(Strength ~ Year + Pop + Hurricane, 
+                data = TestDF2, 
+                # family = "poisson",
+                random =~ ID + ID:Hurricane)
+
+MC3a <- MCMCglmm(Strength ~ Year + Pop, 
+                 data = TestDF2 %>% filter(Hurricane == "Pre"), 
+                 # family = "poisson",
+                 random =~ ID)
+
+MC3b <- MCMCglmm(Strength ~ Year + Pop, 
+                 data = TestDF2 %>% filter(Hurricane == "Post"), 
+                 # family = "poisson",
+                 random =~ ID)
+
+ModelList <- list(MC1, MC2, MC3a, MC3b)
+
+ModelList %>% map("Deviance")
+
+ModelList %>% 
+  map(MCMCRep) %>% 
+  bind_rows(.id = "Model") %>% filter(Component != "units") %>% 
+  # mutate_at(3:5, ~round(as.numeric(.x), 2))
+  mutate_at(3:5, ~as.numeric(.x)) %>% 
+  ggplot(aes(factor(Model), Mode, 
+             fill = Component)) + 
+  geom_col(colour = "black", position = "stack") + 
+  labs(x = "Model") + 
+  theme(axis.text.x = element_text(angle = 45, 
+                                   hjust = 1)) +
+  lims(y = c(NA, 1)) +
+  geom_hline(yintercept = 1, lty = 2, alpha = 0.4) +
+  scale_x_discrete(labels = c("Overall", "ID:Hurricane", "ID Before", "ID After"))

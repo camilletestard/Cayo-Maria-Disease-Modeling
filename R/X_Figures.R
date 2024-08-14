@@ -475,7 +475,7 @@ Segments <-
     geom_point(alpha = 0.1, aes(colour = Hurricane))+
     geom_smooth(method = "lm", colour = "black")+
     # facet_grid(~Hurricane) +
-    scale_x_continuous(breaks = c(0:6/2), labels = c(0:6*5)) +
+    scale_x_continuous(breaks = c(0:5/5)) +
     # scale_y_continuous(breaks = c(0:5*250), 
     #                    limits = c(0, 1250),
     #                    labels = NULL,
@@ -700,6 +700,46 @@ MaintainedLines/BrokenLines
 
 ggsave("Figures/Maintained_vs_Broken.jpeg", units = "mm", height = 180, width = 180)
 
+# Repeatability tile plot ####
+
+IndivDF %>% 
+  # group_by(ID, Pop) %>% 
+  group_by(ID) %>% 
+  summarise(MeanTime = mean(MeanTime),
+            N = n()) %>% 
+  arrange(#Pop, 
+          MeanTime) %>% 
+  pull(ID) -> IDOrder
+
+# IndivDF %>% 
+#   group_by(ID) %>% 
+#   summarise(MeanTime = mean(MeanTime),
+#             N = n()) %>% 
+#   pull(ID) %>% 
+#   intersect(IDOrder) -> IDOrder
+
+IndivDF %>% 
+  mutate(Year = substr(Pop, 2, 5) %>% as.numeric) %>% 
+  mutate_at("ID", ~factor(.x, levels = IDOrder)) %>% 
+  mutate_at("MeanTime", log10) %>% 
+  group_by(Year) %>% mutate_at("MeanTime", scale) %>%
+  ggplot(aes(ID, Year)) +
+  geom_tile(aes(fill = (MeanTime))) + 
+  facet_grid(~Hurricane, scales = "free_x") + 
+  coord_flip() +
+  scale_fill_continuous_sequential(palette = AlberPalettes[[1]])
+
+IndivDF %>% 
+  mutate(Year = substr(Pop, 2, 5) %>% as.numeric) %>% 
+  mutate_at("ID", ~factor(.x, levels = IDOrder)) %>% 
+  mutate_at("MeanTime", log10) %>% 
+  group_by(Pop) %>% mutate_at("MeanTime", scale) %>%
+  ggplot(aes(ID, Pop)) +
+  geom_tile(aes(fill = (MeanTime))) + 
+  facet_grid(~Hurricane, scales = "free_x") + 
+  coord_flip() +
+  scale_fill_continuous_sequential(palette = AlberPalettes[[1]])
+
 
 # Old Figure Stuff #####
 
@@ -809,6 +849,8 @@ GraphList[Samples] %>%
 
 # Supplementary tables ####
 
+
+
 Model1$FinalModel$summary.fixed %>% 
   as.data.frame %>% 
   dplyr::select(Estimate = mean, Lower = `0.025quant`, Upper = `0.975quant`) %>% 
@@ -822,4 +864,32 @@ Model2$FinalModel$summary.fixed %>%
   write.csv("Figures/Model2Estimates.csv", row.names = F)
 
 
+MCMC1 <- readRDS("Data/Outputs/EpidemiologyModel.rds")
 
+MCMCOutput <- 
+  summary(MCMC1)$solutions %>% data.frame %>% 
+  rownames_to_column("Var") %>% 
+  rename(Estimate = 2, Lower = 3, Upper = 4, P = 6) %>% 
+  dplyr::select(1:4, 6)
+
+MCMCOutput[2, c("Estimate", "Lower", "Upper")] <-
+  MCMCOutput[2, c("Estimate", "Lower", "Upper")]/10
+
+MCMCOutput %>% 
+  write.csv("Figures/PopulationModelEstimates.csv", row.names = F)
+
+# Individual Model Comparison ####
+
+ModelList <- readRDS("Data/Intermediate/IndividualInfectionModelList.rds")
+
+names(ModelList) <- c("Gaussian", "Log-Gaussian", 
+                      "Gamma",
+                      "Poisson", "Negative binomial")
+
+ModelList %>% 
+  INLADICFig(Just = T) +
+  scale_x_continuous(labels = c("Gaussian", "Log-Gaussian", 
+                              "Gamma",
+                              "Poisson", "Negative binomial"))
+
+ggsave("Figures/FamilyComparison.jpeg")
