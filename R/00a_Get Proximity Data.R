@@ -1,8 +1,12 @@
-#Get_proximity_data.R
-#This script aggregates the proximity data from all groups and years from 2015 to 2021
-#from the cayo database. The output of this script will be used to generate 
+
+# 00a_Get_proximity_data.R ####
+
+# This script aggregates the proximity data from all groups and years from 2015 to 2021
+# from the cayo database. The output of this script will be used to generate 
 # networks with bison.
-#C Testard August 2022
+
+# C Testard August 2022
+# Edited by Greg Albery 2023-4
 
 {
   
@@ -57,7 +61,6 @@ setwd('Data/Data All Cleaned/BehavioralDataFiles')
 for (gy in 1:length(groupyears)){ #for all group & years
   
   print(paste("%%%%%%%%%%%%%%%%%% ",groupyears[gy], "%%%%%%%%%%%%%%%%%%"))
-  
   
   if (years[gy]==2018) {
     
