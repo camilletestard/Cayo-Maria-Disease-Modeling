@@ -4,7 +4,8 @@
 #Model proximity networks with bison
 #Proximity was collected in scans across all years and is a binary data type.
 
-#C. Testard October 2022
+# C. Testard October 2022
+# Edited by Greg Albery 2023-4
 
 {
   

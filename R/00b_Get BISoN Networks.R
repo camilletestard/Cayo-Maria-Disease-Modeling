@@ -1,7 +1,11 @@
-#bison_proximity_networks.R
+
+# 00b_Get BISoN Networks.R ####
+
 #Model proximity networks for Cayo data with bison
 #This will allow us to capture uncertainty in downstream simulations
-#C. Testard October 2022
+
+# C. Testard October 2022
+# Edited by Greg Albery 2023-4
 
 # devtools::install_github("JHart96/bisonR")
 
