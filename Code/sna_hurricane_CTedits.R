@@ -6,7 +6,8 @@ output: html_document
 ---
 #load packages and data
 #packages
-library(igraph);library(dplyr);library(ggplot2);library(foreach); library(doParallel); library(stringr); library(tidyverse);library(magrittr); library(fs); library(lme4)
+
+library(igraph); library(tibble); library(dplyr);library(ggplot2);library(foreach); library(doParallel); library(stringr); library(tidyverse);library(magrittr); library(fs); library(lme4)
 
 # #data
 # load("/Users/alba/Desktop/Postdoc_UNIL/Hurricane_project/BisonFittedNetworks.RData")
@@ -72,7 +73,7 @@ for (g in 1:length(names(posterior.filtered))){
     cfg<-cluster_fast_greedy(x, modularity = T, membership = T, weights = posterior.filtered[[g]][,d])
     modul_networks[d-2,g] <-modularity(cfg)
     #substract 0 edges
-    y<-delete.edges(x,E(x)[E(x)$weight == 0])
+    y<-delete_edges(x,E(x)[E(x)$weight == 0])
     dense_networks[d-2,g]<- edge_density(y)
     trans_networks[d-2,g]<-transitivity(y, type="global")
   }
@@ -137,10 +138,12 @@ ggplot(network_metrics, aes(x=modularity, color=prepost))+#quite normal
   facet_grid(~group)
 #density
 ggplot(network_metrics, aes(x=density, color=prepost))+#quite normal
-  geom_density()
+  geom_histogram()+
+  facet_grid(~group)
 #transitivity
 ggplot(network_metrics, aes(x=transitivity, color=prepost))+#quite normal
-  geom_density()
+  geom_histogram()+
+  facet_grid(~group)
 
 cor.test(network_metrics$density, network_metrics$transitivity)
 cor.test(network_metrics$density, network_metrics$modularity)
@@ -150,7 +153,7 @@ library(lmerTest)
 library(broom.mixed)
 
 #test running model on one iteration only
-test=network_metrics[network_metrics$draw=="draw.1",]
+test=network_metrics[network_metrics$draw=="draw.2",]
 mdl<-lmer(modularity ~ prepost + density + (1|group), data = test)
 summary(mdl)
 

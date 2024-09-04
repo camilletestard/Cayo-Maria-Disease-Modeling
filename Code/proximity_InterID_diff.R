@@ -37,7 +37,7 @@ groupyears = paste0(group,years)
 ######################################
 
 # Extract change in proximity from each draw to create imputed data set:
-imputed.data=list(); imputed.data.prepost=list(); i=1; gy=1;
+imputed.data=list(); imputed.data.prepost=list(); i=1; gy=1; num_iter=100
 imputed.density=list()
   for (i in 1:num_iter){
     
