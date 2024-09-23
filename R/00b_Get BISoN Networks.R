@@ -16,9 +16,7 @@
   library(ggplot2)
   library(fs)
   
-  dir_create("Intermediate")
-  
-  edgelist.all <- readRDS("Intermediate/proximity_data.rds")
+  edgelist.all <- readRDS("Data/Intermediate/proximity_data.rds")
   
   edgelist.all$groupyear = paste0(edgelist.all$group, edgelist.all$year)
   

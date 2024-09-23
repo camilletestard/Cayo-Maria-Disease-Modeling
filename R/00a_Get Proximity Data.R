@@ -251,6 +251,10 @@ save(edgelist.all, file = "Data/R.Data/proximity_data.RData")
 
 edgelist.all %>% saveRDS("Data/R.Data/proximity_data.rds")
 
-load("Data/R.Data/proximity_data.RData")
+# load("Data/R.Data/proximity_data.RData")
 
+dir_create("Intermediate")
 
+save(edgelist.all, file = "Data/Intermediate/proximity_data.RData")
+
+edgelist.all %>% saveRDS("Data/Intermediate/proximity_data.rds")

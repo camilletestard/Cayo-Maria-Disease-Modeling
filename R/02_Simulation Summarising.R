@@ -13,7 +13,8 @@
     "Data/Outputs/BISoN" %>% 
     dir_ls()
   
-  names(FileList) <- "Data/Outputs/BISoN" %>%
+  names(FileList) <- 
+    "Data/Outputs/BISoN" %>%
     list.files
   
 }

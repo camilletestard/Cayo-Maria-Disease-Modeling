@@ -57,7 +57,7 @@ gy=24; node_strength_all = list(); node_degree_all = list(); density_all = list(
 
 num_iter = 1000
 
-edge_thresh=0.0001
+edge_thresh = 0.0001
 
 for (gy in 1:length(groupyears)){ #for all group-years
   

@@ -3,5 +3,6 @@
 
 library(tidyverse); library(fs); library(magrittr)
 
-"R" %>% dir_ls(regex = ".R$") %>% extract(-1) %>% 
+"R" %>% dir_ls(regex = ".R$") %>%
+  extract(-c(1:2)) %>% 
   map(source)

@@ -25,17 +25,18 @@ reps = 1000 # number of times the simulation should be repeated
 
 sims = 10000 # number of time steps/times each dyad should be allowed to potentially interact
 
-MeanInf <- 0.15
+MeanInf <- 0.15 # Mean infectivity
 
-InfSD <- 0.04
+InfSD <- 0.04 # Possible variation in infectivity across iterations
 
-FocalRep <- Reps[1]
+# FocalRep <- Reps[1] # Just used to stress test and problemsolve 
 
 for(FocalRep in Reps){
   
   print(FocalRep)
   
-  RepData <- AggregatedEdges %>% filter(Rep == FocalRep)
+  RepData <- AggregatedEdges %>% 
+    filter(Rep == FocalRep)
 
   r <- dir_ls("Data/Outputs/BISoN",
               regex = "Data/Outputs/BISoN/" %>%
