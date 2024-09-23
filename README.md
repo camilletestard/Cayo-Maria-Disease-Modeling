@@ -23,4 +23,4 @@ The code was initially written mostly by Camille Testard and Alba Motes-Rodrigo,
 04. Produce figures.
 05. Write out results.
 
-Enjoy! If you have any questions at all about the approach, feel free to email [Greg Albery](gfalbery@gmail.com).
+Enjoy! If you have any questions at all about the approach, feel free to email [Greg Albery](mailto:gfalbery@gmail.com).
