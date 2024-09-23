@@ -16,10 +16,11 @@ The code was initially written mostly by Camille Testard and Alba Motes-Rodrigo,
 - All the scripts beginning with `00` will import and clean the raw observational data and create a series of simulated networks using BISoN. The output of this code is large (~800MB) and therefore not stored here.
 
 - The subsequent scripts will:
-- 01. Simulate 1000 epidemics on each group-by-population combination, and run a population-level model examining the factors driving epidemic risk.
-- 02. Summarise the outputs of these epidemics.
-- 03. Run models that produce estimates of the factors driving epidemic risk, at the individual level.
-- 04. Produce figures.
-- 05. Write out results.
 
-Enjoy! If you have any questions at all about the approach, feel free to email (Greg Albery)[gfalbery@gmail.com].
+01. Simulate 1000 epidemics on each group-by-population combination, and run a population-level model examining the factors driving epidemic risk.
+02. Summarise the outputs of these epidemics.
+03. Run models that produce estimates of the factors driving epidemic risk, at the individual level.
+04. Produce figures.
+05. Write out results.
+
+Enjoy! If you have any questions at all about the approach, feel free to email [Greg Albery](gfalbery@gmail.com).
