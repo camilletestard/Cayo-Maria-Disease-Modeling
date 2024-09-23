@@ -35,7 +35,7 @@ TimeStepDF <- readRDS("Data/Outputs/PopulationTimeSteps.rds")
     labs(colour = NULL, x = "Time step", y = "Proportion infected") +
     # theme(legend.position = "top", legend.justification = 0.5) +
     theme(legend.position = "top", 
-          legend.background = element_rect(colour = "grey"),
+          # legend.background = element_rect(colour = "grey"),
           legend.justification = 0.5) +
     facet_grid(Population ~ .) + 
     theme(strip.background = element_blank()) +#,
@@ -137,6 +137,12 @@ CoefDF[1, c("Estimate", "Lower", "Upper")] <-
 ggsave("Figures/Figure1.jpeg", units = "mm", 
        width = 180, 
        height = 275, 
+       dpi = 600)
+
+ggsave("Figures/Figure1.pdf", 
+       units = "mm", 
+       width = 180, 
+       height = 275, 
        dpi = 300)
 
 # Figure 2 ####
@@ -185,7 +191,7 @@ Model2 <- readRDS("Data/Intermediate/IndividualInfectionModelAddStrength.rds")
       Intercept = F,
       ModelNames = rev(c("Base", "+Strength")),
       VarOrder = rev(c("HurricanePost", "Age", "SexM", "Rank", 
-                     paste0("HurricanePost_", c("Age", "SexM", "Rank")), "Strength"))) +
+                       paste0("HurricanePost_", c("Age", "SexM", "Rank")), "Strength"))) +
     scale_colour_manual(values = c(AlberColours[[1]], AlberColours[[2]]),
                         limits = c("Base", "+Strength")) +
     theme(legend.position = c(0.1, 0.1), 
@@ -194,25 +200,25 @@ Model2 <- readRDS("Data/Intermediate/IndividualInfectionModelAddStrength.rds")
 ## Panel B: Rank ####
 
 (PanelB <-
-    IndivDF %>% 
-    ggplot(aes(x = Rank, y = MeanTime)) +
-    # geom_jitter(alpha = 0.3, aes(colour = isPost))+
-    geom_point(alpha = 0.1, aes(colour = Hurricane))+
-    geom_smooth(method = "lm", colour = "black")+
-    # facet_grid(~Hurricane) +
-    scale_x_continuous(breaks = c(0:5/5)) +
-    # scale_y_continuous(breaks = c(0:5*250), 
-    #                    limits = c(0, 1250),
-    #                    labels = NULL,
-    #                    name = NULL) +
-    ggpubr::stat_cor() +
-    scale_colour_manual(values = ParasiteColours[c(5, 4)]) +
-    theme(strip.background = element_rect(fill = "white", #colour = "dark grey",
-                                          colour = "white")) +
-    labs(x = "Proportion dominant interactions") +
-    theme(legend.position = "none") + scale_y_log10(breaks = 2^(1:10), 
-                                                    name = "Mean infection timestep",
-                                                    limits = c(30, 1250)))
+   IndivDF %>% 
+   ggplot(aes(x = Rank, y = MeanTime)) +
+   # geom_jitter(alpha = 0.3, aes(colour = isPost))+
+   geom_point(alpha = 0.1, aes(colour = Hurricane))+
+   geom_smooth(method = "lm", colour = "black")+
+   # facet_grid(~Hurricane) +
+   scale_x_continuous(breaks = c(0:5/5)) +
+   # scale_y_continuous(breaks = c(0:5*250), 
+   #                    limits = c(0, 1250),
+   #                    labels = NULL,
+   #                    name = NULL) +
+   ggpubr::stat_cor() +
+   scale_colour_manual(values = ParasiteColours[c(5, 4)]) +
+   theme(strip.background = element_rect(fill = "white", #colour = "dark grey",
+                                         colour = "white")) +
+   labs(x = "Proportion dominant interactions") +
+   theme(legend.position = "none") + scale_y_log10(breaks = 2^(1:10), 
+                                                   name = "Mean infection timestep",
+                                                   limits = c(30, 1250)))
 
 ## Panel C: Age ####
 
@@ -274,7 +280,6 @@ SexSegments <-
                                                     labels = NULL,
                                                     name = NULL))
 
-
 ## Combining ####
 
 PanelA/
@@ -282,7 +287,17 @@ PanelA/
   plot_annotation(tag_levels = "A") +
   plot_layout(heights = c(1, 1.5))
 
-ggsave("Figures/Figure2.jpeg", units = "mm", height = 200, width = 300)
+ggsave("Figures/Figure2.jpeg", 
+       units = "mm", 
+       height = 200, 
+       width = 300,
+       dpi = 600)
+
+ggsave("Figures/Figure2.pdf", 
+       units = "mm", 
+       height = 200, 
+       width = 300,
+       dpi = 600)
 
 # ~~~~~ Supplement ####
 
@@ -364,7 +379,7 @@ IndivDF %>%
   summarise(MeanTime = mean(MeanTime),
             N = n()) %>% 
   arrange(#Pop, 
-          MeanTime) %>% 
+    MeanTime) %>% 
   pull(ID) -> IDOrder
 
 # IndivDF %>% 
@@ -435,7 +450,7 @@ names(ModelList) <- c("Gaussian", "Log-Gaussian",
 ModelList %>% 
   INLADICFig(Just = T) +
   scale_x_continuous(labels = c("Gaussian", "Log-Gaussian", 
-                              "Gamma",
-                              "Poisson", "Negative binomial"))
+                                "Gamma",
+                                "Poisson", "Negative binomial"))
 
 ggsave("Figures/FamilyComparison.jpeg")

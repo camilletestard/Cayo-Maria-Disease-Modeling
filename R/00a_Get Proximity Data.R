@@ -56,7 +56,9 @@
   
 }
 
-setwd('Data/Data All Cleaned/BehavioralDataFiles')
+# setwd('Data/Data All Cleaned/BehavioralDataFiles')
+
+setwd('Data/Input')
 
 for (gy in 1:length(groupyears)){ #for all group & years
   
